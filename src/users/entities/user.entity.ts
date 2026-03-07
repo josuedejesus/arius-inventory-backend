@@ -14,10 +14,10 @@ export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ length: 50 })
+  @Column({ type: 'varchar', length: 50 })
   username: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   password_hash: string;
 
   @Column({
@@ -26,13 +26,13 @@ export class User {
   })
   role: UserRole;
 
-  @Column()
+  @Column({ type: 'boolean' })
   is_active: boolean;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   person_id?: number | null;
 
-  @OneToOne(() => Person, (p) => p.user, {nullable: true})
+  @OneToOne(() => Person, (p) => p.user, { nullable: true })
   @JoinColumn({
     name: 'person_id',
   })

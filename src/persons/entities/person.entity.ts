@@ -4,37 +4,38 @@ import { User } from "src/users/entities/user.entity";
 
 @Entity('persons')
 export class Person {
-    @PrimaryGeneratedColumn()
-    id: number;
 
-    @Column({length: 200})
-    name: string;
+  @PrimaryGeneratedColumn()
+  id: number;
 
-    @Column({ unique: true, length: 20 })
-    phone: string;
+  @Column({ type: 'varchar', length: 200 })
+  name: string;
 
-    @Column({ unique: true })
-    email: string;
+  @Column({ type: 'varchar', length: 20, unique: true })
+  phone: string;
 
-    @Column({
-        type: 'enum',
-        enum: PersonRole,
-        default: PersonRole.EMPLOYEE
-    })
-    role: PersonRole;
+  @Column({ type: 'varchar', unique: true })
+  email: string;
 
-    @Column({type: 'timestamp' })
-    created_at: Date;
+  @Column({
+    type: 'enum',
+    enum: PersonRole,
+    default: PersonRole.EMPLOYEE
+  })
+  role: PersonRole;
 
-    @Column({type: 'timestamp'})
-    updated_at: Date;
+  @Column({ type: 'timestamptz' })
+  created_at: Date;
 
-    @Column({ nullable: true })
-    address: string;
+  @Column({ type: 'timestamptz' })
+  updated_at: Date;
 
-    @Column({ unique: true, nullable: true })
-    rtn: string;
+  @Column({ type: 'varchar', nullable: true })
+  address: string;
 
-    @OneToOne(() => User, user => user.person)
-    user: User;
+  @Column({ type: 'varchar', unique: true, nullable: true })
+  rtn: string;
+
+  @OneToOne(() => User, user => user.person)
+  user: User;
 }
