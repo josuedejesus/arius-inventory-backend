@@ -345,6 +345,8 @@ export class ItemsService {
       )
       .first();
 
+    console.log('item stats', result);
+
     return result;
   }
 

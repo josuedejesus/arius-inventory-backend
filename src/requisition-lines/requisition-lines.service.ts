@@ -120,12 +120,11 @@ export class RequisitionLinesService {
   }
 
   async findItemsByRequisitionId(requisitionId: number) {
-    const lines = await this.db('requisition_lines')
-      .leftJoin('item_units', 'item_units.id', 'requisition_lines.item_unit_id')
-      .select('item_units.*')
-      .where('requisition_lines.requisition_id', requisitionId);
-
-    return lines;
+    return this.db('requisition_lines')
+      .join('item_units', 'item_units.id', 'requisition_lines.item_unit_id')
+      .where('requisition_lines.requisition_id', requisitionId)
+      .whereNotNull('requisition_lines.item_unit_id')
+      .select('item_units.*');
   }
 
   async updateMany(lines: any, trx: any = null) {

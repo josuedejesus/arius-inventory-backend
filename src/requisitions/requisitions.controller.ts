@@ -140,9 +140,6 @@ export class RequisitionsController {
       });
     }
 
-    return {
-      success: true,
-      data: requisitions,
-    };
+    return requisitions;
   }
 }

@@ -120,53 +120,35 @@ export class RequisitionsService {
 
   async create(dto: CreateRequisitionDto) {
     return this.db.transaction(async (trx: any) => {
-      const requisitionPayload = {
-        requested_by: dto.requested_by,
-        destination_location_id: dto.destination_location_id,
-        status: dto.status,
-        notes: dto.notes,
-        type: dto.type,
-        schedulled_at: dto.schedulled_at,
-      };
-
-      //create requisition
       const [requisition] = await trx('requisitions')
-        .insert(requisitionPayload)
+        .insert({
+          requested_by: dto.requested_by,
+          destination_location_id: dto.destination_location_id,
+          status: dto.status,
+          notes: dto.notes,
+          type: dto.type,
+          schedulled_at: dto.schedulled_at,
+        })
         .returning('*');
 
-      //create lines
-      const lines = await Promise.all(
-        dto.lines.map(async (i: any) => {
-          let source_location_id = null;
+      // líneas simples sin calcular source
+      const lines = dto.lines.map((l: any) => ({
+        requisition_id: requisition.id,
+        item_id: l.item_id,
+        item_unit_id: l.item_unit_id || null,
+        quantity: l.quantity,
+        destination_location_id: dto.destination_location_id,
+        _accessories: l.accessories || [],
+      }));
 
-          if (i.item_unit_id) {
-            // unidad serializada → obtenés su location actual
-            const unit = await trx('item_units')
-              .where({ id: i.item_unit_id })
-              .select('location_id')
-              .first();
-            source_location_id = unit?.location_id ?? null;
-          }
-          return {
-            requisition_id: requisition.id,
-            item_id: i.item_id,
-            item_unit_id: i.item_unit_id || null,
-            quantity: i.quantity,
-            return_of_line_id: i.return_of_line_id || null,
-            source_location_id,
-            destination_location_id: dto.destination_location_id,
-          };
-        }),
-      );
-
+      const linesData = lines.map(({ _accessories, ...line }) => line);
       const createdLines = await this.requisitionLinesService.createMany(
-        lines,
+        linesData,
         trx,
       );
-      const lineAccessoriesPayload = createdLines.flatMap((line, index) => {
-        const accessories = dto.lines[index].accessories || [];
 
-        return accessories.map((acc: any) => ({
+      const lineAccessoriesPayload = createdLines.flatMap((line, index) => {
+        return (lines[index]._accessories || []).map((acc: any) => ({
           requisition_line_id: Number(line.id),
           accessory_id: acc.accessory_id,
           quantity: acc.quantity,
@@ -182,9 +164,160 @@ export class RequisitionsService {
       this.eventsService.emit('requisition.created', {
         requisitionId: requisition.id,
       });
-
       return requisition;
     });
+  }
+
+  async approve(requisitionId: number, personId: string) {
+    return this.db.transaction(async (trx: any) => {
+      const requisition = await trx('requisitions')
+        .where({ id: requisitionId })
+        .first();
+      if (!requisition) throw new NotFoundException('Requisicion no existe');
+
+      const lines = await this.requisitionLinesService.findByRequisitionId(
+        requisition.id,
+      );
+
+      // resolvé y actualizá source por línea
+      await Promise.all(
+        lines.map(async (l: any) => {
+          if (l.item_unit_id) {
+            // unidad serializada — validá que esté en la ubicación correcta
+            const unit = await trx('item_units')
+              .where({ id: l.item_unit_id })
+              .select('location_id')
+              .first();
+            if (!unit)
+              throw new ConflictException(
+                `Unidad ${l.item_unit_id} no encontrada`,
+              );
+
+            await trx('requisition_lines').where({ id: l.id }).update({
+              source_location_id: unit.location_id,
+            });
+          } else {
+            // insumo — calculá source con split
+            const splits = await this.resolveSourceLocation(
+              l.item_id,
+              l.quantity,
+              trx,
+              requisition.destination_location_id,
+            );
+
+            // si hay split, la línea original se reemplaza por múltiples
+            if (splits.length === 1) {
+              await trx('requisition_lines').where({ id: l.id }).update({
+                source_location_id: splits[0].source_location_id,
+              });
+            } else {
+              // eliminá la línea original y creá las sub-líneas
+              await trx('requisition_lines').where({ id: l.id }).delete();
+              await this.requisitionLinesService.createMany(
+                splits.map((s) => ({
+                  requisition_id: requisitionId,
+                  item_id: l.item_id,
+                  item_unit_id: null,
+                  quantity: s.quantity,
+                  source_location_id: s.source_location_id,
+                  destination_location_id: requisition.destination_location_id,
+                })),
+                trx,
+              );
+            }
+          }
+        }),
+      );
+
+      // reservá unidades serializadas
+      const itemsUnits =
+        await this.requisitionLinesService.findItemsByRequisitionId(
+          requisition.id,
+        );
+      const itemUnitIds = itemsUnits.map((u: any) => u.id);
+
+      if (itemUnitIds.length > 0) {
+        await this.itemUnitsService.updateMany(
+          itemUnitIds,
+          {
+            status: ItemUnitStatus.RESERVED,
+            updated_at: new Date(),
+          },
+          trx,
+        );
+      }
+
+      await trx('requisitions').where({ id: requisitionId }).update({
+        status: 'APPROVED',
+        approved_by: personId,
+        approved_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      this.eventsService.emit('requisition.approved', { requisitionId });
+      return { requisition_id: requisitionId };
+    });
+  }
+
+  private async resolveSourceLocation(
+    itemId: number,
+    quantity: number,
+    trx: any,
+    destinationId?: number,
+  ) {
+    console.log('destinationId', destinationId);
+    // si el destino es WAREHOUSE (compra, ajuste) no necesita source
+    if (destinationId) {
+      const destination = await trx('locations')
+        .where({ id: destinationId })
+        .select('type')
+        .first();
+
+      if (destination?.type === 'WAREHOUSE') {
+        return [{ source_location_id: null, quantity: Number(quantity) }];
+      }
+    }
+    const warehouses = await trx('locations')
+      .where('locations.type', 'WAREHOUSE')
+      .select(
+        'locations.id as location_id',
+        trx.raw(
+          `
+        COALESCE((
+          SELECT SUM(quantity) FROM stock_moves
+          WHERE item_id = ? AND destination_location_id = locations.id
+        ), 0)
+        -
+        COALESCE((
+          SELECT SUM(quantity) FROM stock_moves
+          WHERE item_id = ? AND source_location_id = locations.id
+        ), 0) AS available
+      `,
+          [itemId, itemId],
+        ),
+      )
+      .orderBy('available', 'desc');
+
+    // filtrás en JS — más simple y sin el problema de bindings
+    const withStock = warehouses.filter((w: any) => Number(w.available) > 0);
+
+    let remaining = Number(quantity);
+    const sources: { source_location_id: number; quantity: number }[] = [];
+
+    for (const wh of withStock) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, Number(wh.available));
+      sources.push({ source_location_id: wh.location_id, quantity: take });
+      remaining -= take;
+    }
+
+    if (remaining > 0) {
+      throw new ConflictException(
+        `Stock insuficiente para el item ${itemId}. Faltan ${remaining} unidades.`,
+      );
+    }
+
+    return sources;
   }
 
   async update(requisitionId: number, dto: UpdateRequisitionDto) {
@@ -286,80 +419,6 @@ export class RequisitionsService {
     });
   }
 
-  async approve(requisitionId: number, personId: string) {
-    return this.db.transaction(async (trx: any) => {
-      //Get requisition
-      const requisition = await trx('requisitions')
-        .where({
-          id: requisitionId,
-        })
-        .first();
-
-      if (!requisition) {
-        throw new NotFoundException('Requisicion no existe');
-      }
-
-      //Buildad update payload
-      const updateRequisitionPayload = {
-        status: 'APPROVED',
-        approved_by: personId,
-        approved_at: new Date(),
-        updated_at: new Date(),
-      };
-
-      //Update items status
-      const itemsUnits =
-        await this.requisitionLinesService.findItemsByRequisitionId(
-          requisition.id,
-        );
-
-      const lines = await this.requisitionLinesService.findByRequisitionId(
-        requisition.id,
-      );
-
-      const invalidUnits = itemsUnits.filter((unit: any) => {
-        const line = lines.find(
-          (l: any) => Number(l.item_unit_id) === Number(unit.id),
-        );
-        return unit.location_id !== line?.source_location_id;
-      });
-
-      if (invalidUnits.length > 0) {
-        throw new ConflictException(
-          `Hay unidades que no están en la ubicación de origen`,
-        );
-      }
-
-      //Update requisition
-      await trx('requisitions')
-        .where({
-          id: requisitionId,
-        })
-        .update(updateRequisitionPayload);
-
-      this.eventsService.emit('requisition.approved', {
-        requisitionId: requisitionId,
-      });
-
-      const itemUnitIds = itemsUnits.map((u: any) => u.id);
-
-      const itemUnitsPayload = {
-        status: ItemUnitStatus.RESERVED,
-        updated_at: new Date(),
-      };
-
-      await this.itemUnitsService.updateMany(
-        itemUnitIds,
-        itemUnitsPayload,
-        trx,
-      );
-
-      return {
-        requisition_id: requisitionId,
-      };
-    });
-  }
-
   async execute(requisitionId: number, personId: string) {
     return this.db.transaction(async (trx: any) => {
       const requisition = await this.db('requisitions')
@@ -404,8 +463,8 @@ export class RequisitionsService {
         item_id: l.item_id,
         item_unit_id: l.item_unit_id,
         quantity: l.quantity,
-        source_location_id: l.location_id,
-        destination_location_id: LOCATIONS.TRANSIT,
+        source_location_id: l.source_location_id,
+        destination_location_id: null,
         executed_by: personId,
         executed_at: new Date(),
       }));
@@ -421,7 +480,7 @@ export class RequisitionsService {
 
       const itemUnitsPayload = {
         status: ItemUnitStatus.IN_TRANSIT,
-        location_id: LOCATIONS.TRANSIT,
+        location_id: null,
         updated_at: new Date(),
       };
 
@@ -501,7 +560,7 @@ export class RequisitionsService {
         item_id: l.item_id,
         item_unit_id: l.item_unit_id,
         quantity: l.quantity,
-        source_location_id: LOCATIONS.TRANSIT,
+        source_location_id: null,
         destination_location_id: l.destination_location_id,
         received_by: personId,
         received_at: receiptDate,

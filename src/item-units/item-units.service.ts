@@ -671,9 +671,12 @@ export class ItemUnitsService {
         COUNT(*) FILTER (WHERE iu.status = 'IN_TRANSIT') 
         as in_transit_units
       `),
-
         this.db.raw(`
-        COUNT(*) FILTER (WHERE iu.location_id IS NULL) 
+            COUNT(*) FILTER (WHERE iu.status = 'RESERVED') 
+            as reserved_units
+          `),
+        this.db.raw(`
+        COUNT(*) FILTER (WHERE iu.location_id IS NULL and iu.status = 'AVAILABLE') 
         as without_location
       `),
       )
