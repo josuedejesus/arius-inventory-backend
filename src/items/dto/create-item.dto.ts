@@ -51,6 +51,10 @@ export class CreateItemDto {
   @IsOptional()
   minimum_stock?: string;
 
+  @IsString()
+  @IsOptional()
+  usage_hours?: string;
+
   //Accessories
   @Transform(({ value }) => {
     if (typeof value === 'string') return JSON.parse(value);

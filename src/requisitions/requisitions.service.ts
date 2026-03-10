@@ -445,11 +445,11 @@ export class RequisitionsService {
         (l: any) => Number(l.photos_count) === 0,
       );
 
-      /*if (invalidLines.length > 0) {
+      if (invalidLines.length > 0) {
         throw new BadRequestException(
           'No se puede ejecutar la requisición: todos los artículos deben contar con evidencia fotográfica',
         );
-      }*/
+      }
 
       //Update requisition
       await trx('requisitions')

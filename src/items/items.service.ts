@@ -103,6 +103,7 @@ export class ItemsService {
           unit_id: dto.unit_id,
           is_active: dto.is_active,
           minimum_stock: dto.minimum_stock,
+          usage_hours: dto.usage_hours,
         })
         .returning('*');
 
