@@ -28,6 +28,18 @@ export class PersonsController {
     return this.personsService.findAll();
   }
 
+  @Get(':id/locations')
+  @UseGuards(JwtAuthGuard)
+  async getPersonLocations(@Param('id', ParseIntPipe) id: number) {
+    return this.personsService.getLocations(id);
+  }
+
+  @Get(':id/item-units')
+  @UseGuards(JwtAuthGuard)
+  async getPersonItemsUnits(@Param('id', ParseIntPipe) id: number) {
+    return this.personsService.getItems(id);
+  }
+
   @Get(':id')
   async findById(@Param('id', ParseIntPipe) id: number) {
     const person = await this.personsService.findById(id);

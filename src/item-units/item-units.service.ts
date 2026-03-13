@@ -704,4 +704,30 @@ export class ItemUnitsService {
       .groupBy('p.id', 'p.name')
       .orderBy('p.name');
   }
+
+  async getUsageLogs(id: Number) {
+    const rows = await this.db('item_unit_usage_logs as ul')
+      .join('requisitions as r', 'r.id', 'ul.requisition_id')
+      .join('locations as l', 'r.destination_location_id', 'l.id')
+      .where('ul.item_unit_id', id)
+      .whereNotNull('ul.hours_used')
+      .select('l.id as location_id', 'l.name as location_name')
+      .sum('ul.hours_used as hours')
+      .groupBy('l.id', 'l.name');
+
+    const totalUsage = rows.reduce((sum, r) => sum + Number(r.hours), 0);
+
+    const locations = rows.map((r) => ({
+      location_id: r.location_id,
+      location_name: r.location_name,
+      hours: Number(r.hours),
+      percentage: totalUsage
+        ? Math.round((Number(r.hours) / totalUsage) * 100)
+        : 0,
+    }));
+    return {
+      total_usage: totalUsage,
+      locations,
+    };
+  }
 }

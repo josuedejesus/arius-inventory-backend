@@ -138,6 +138,7 @@ export class RequisitionsService {
         item_unit_id: l.item_unit_id || null,
         quantity: l.quantity,
         destination_location_id: dto.destination_location_id,
+        return_of_line_id: l.return_of_line_id || null,
         _accessories: l.accessories || [],
       }));
 
@@ -620,36 +621,42 @@ export class RequisitionsService {
 
     if (!parentLinesIds.length) return;
 
-    const parentRequisitionsIds = await this.db('requisition_lines')
+    const parentRequisitionsIds = await trx('requisition_lines')
       .whereIn('id', parentLinesIds)
       .pluck('requisition_id');
 
     if (!parentRequisitionsIds.length) return;
 
-    const units = await this.db('item_units')
+    const units = await trx('item_units')
       .join('items', 'items.id', 'item_units.item_id')
       .select('item_units.id as item_unit_id', 'items.usage_hours')
       .whereIn('item_units.id', itemUnitIds);
 
+    console.log('units', units);
+
     const usageMap = new Map(
-      units.map((u) => [u.item_unit_id, Number(u.usage_hours || 0)]),
+      units.map((u) => [Number(u.item_unit_id), Number(u.usage_hours || 0)]),
     );
 
-    const logs = await this.db('item_unit_usage_logs')
+    console.log('usageMap', usageMap);
+
+    const logs = await trx('item_unit_usage_logs')
       .whereIn('requisition_id', parentRequisitionsIds)
-      .whereIn('item_unit_id', itemUnitIds);
+      .whereIn('item_unit_id', itemUnitIds)
+      .whereNull('end_at');
 
     const logPayload = logs.map((log) => {
       const startDate = new Date(log.start_at);
 
-      const diffDays = Math.max(
-        1,
-        Math.ceil(
+      const diffDays =
+        Math.floor(
           (receiptDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-        ),
-      );
+        ) + 1;
 
+      console.log('log', log);
       const usagePerDay = usageMap.get(log.item_unit_id) || 0;
+
+      console.log('uso por dia', usagePerDay);
 
       return {
         id: log.id,
@@ -658,7 +665,9 @@ export class RequisitionsService {
       };
     });
 
-    await this.ItemUnitUsageLogsService.updateMany(logPayload, trx);
+    if (logPayload.length > 0) {
+      await this.ItemUnitUsageLogsService.updateMany(logPayload, trx);
+    }
   }
 
   async findAll(filters?: { personId: string }) {

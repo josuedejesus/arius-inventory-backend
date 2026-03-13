@@ -193,6 +193,13 @@ export class ItemUnitsController {
     };
   }
 
+  @Get(':id/usage-logs')
+  async getUsageLogs(@Param('id', ParseIntPipe) id: number) {
+    const logs = await this.itemUnitsService.getUsageLogs(id);
+    console.log(logs);
+    return logs;
+  }
+
   @Get(':id')
   async findById(@Param('id') id: string) {
     const item = await this.itemUnitsService.findById(id);
