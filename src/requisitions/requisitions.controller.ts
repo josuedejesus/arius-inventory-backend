@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -16,6 +17,8 @@ import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { CreateReturnRequisitionDto } from './dto/create-return-requisition.dto';
 import { UpdateRequisitionDto } from './dto/update-requisition.dto';
+import { PagedRequestDto } from './dto/PaginationDto';
+import { RequisitionFilterDto } from './dto/RequisitionFilterDto';
 
 @Controller('requisitions')
 export class RequisitionsController {
@@ -125,21 +128,24 @@ export class RequisitionsController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  async findAll(@Req() req: any) {
+  async findAll(
+    @Req() req: any,
+    @Query() request?: PagedRequestDto,
+  ) {
     const user = req.user;
 
     const privilegedRoles = ['ADMIN', 'WAREHOUSE_MANAGER', 'OPERATION_MANAGER'];
 
-    let requisitions = [];
+    let userFilter = {};
 
-    if (privilegedRoles.includes(user.role)) {
-      requisitions = await this.requisitionsService.findAll();
-    } else {
-      requisitions = await this.requisitionsService.findAll({
-        personId: user.person_id,
-      });
+    if (!privilegedRoles.includes(user.role)) {
+      userFilter = { personId: user.person_id };
     }
 
-    return requisitions;
+    console.log('Request:', request);
+
+    const pagedResult = await this.requisitionsService.findAll(userFilter, request);
+    console.log('Paged Result:', pagedResult);
+    return pagedResult;
   }
 }

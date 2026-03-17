@@ -27,6 +27,8 @@ import { UpdateRequisitionDto } from './dto/update-requisition.dto';
 import { RequisitionLineViewModel } from 'src/requisition-lines/dto/requisition-line-view.model';
 import { not } from 'rxjs/internal/util/not';
 import { CreateRequisitionLineDto } from 'src/requisition-lines/dto/create-requisition-line.dto';
+import { PagedRequestDto } from './dto/PaginationDto';
+import { RequisitionFilterDto } from './dto/RequisitionFilterDto';
 
 const LOCATIONS = {
   TRANSIT: 3,
@@ -670,8 +672,14 @@ export class RequisitionsService {
     }
   }
 
-  async findAll(filters?: { personId: string }) {
-    const query = this.db('requisitions as r')
+  async findAll(
+    filters?: { personId?: string },
+    pagination?: { skipCount?: number; maxResultCount?: number },
+  ) {
+    const { skipCount = 0, maxResultCount = 10 } = pagination || {};
+
+    /* 🧠 BASE QUERY (SIN SELECT NI GROUP) */
+    const baseQuery = this.db('requisitions as r')
       .join('persons as p', 'p.id', 'r.requested_by')
 
       .leftJoin(
@@ -686,27 +694,42 @@ export class RequisitionsService {
         'r.destination_location_id',
       )
 
-      // líneas originales
       .leftJoin('requisition_lines as rl', function () {
         this.on('rl.requisition_id', '=', 'r.id').andOnNotNull(
           'rl.item_unit_id',
         );
       })
 
-      // devoluciones
       .leftJoin('requisition_lines as rlr', 'rlr.return_of_line_id', 'rl.id')
-      .leftJoin('requisitions as rr', 'rr.id', 'rlr.requisition_id')
+      .leftJoin('requisitions as rr', 'rr.id', 'rlr.requisition_id');
 
+    /* 🔎 FILTROS (UNA SOLA VEZ) */
+    if (filters?.personId) {
+      baseQuery.where('r.requested_by', filters.personId);
+    }
+
+    /* 🔢 COUNT CORRECTO */
+    const totalResult = await baseQuery
+      .clone()
+      .clearSelect()
+      .clearOrder()
+      .countDistinct('r.id as total')
+      .first();
+
+    const total = Number(totalResult?.total || 0);
+
+    /* 📊 QUERY PRINCIPAL */
+    const query = baseQuery
+      .clone()
       .groupBy(
         'r.id',
         'p.name',
         'source_location.name',
         'destination_location.name',
       )
-
       .select(
         'r.*',
-        'p.name as requestor',
+        'p.name as requestor_name',
         'source_location.name as source_location_name',
         'destination_location.name as destination_location_name',
 
@@ -727,14 +750,17 @@ export class RequisitionsService {
         END as return_status
       `),
       )
+      .orderBy('r.id', 'desc')
+      .limit(maxResultCount)
+      .offset(skipCount);
 
-      .orderBy('r.id', 'desc');
+    const items = await query;
 
-    if (filters?.personId) {
-      query.where('r.requested_by', filters.personId);
-    }
-
-    return await query;
+    /* 🎯 RESPONSE ESTÁNDAR */
+    return {
+      items,
+      total,
+    };
   }
 
   async findById(
@@ -826,5 +852,9 @@ export class RequisitionsService {
         requisition_id: newRequisition.id,
       };
     });
+  }
+
+  async getCount() {
+    return await this.db('requisitions').count('id as count').first();
   }
 }
