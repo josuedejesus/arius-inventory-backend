@@ -157,6 +157,9 @@ export class PersonsService {
       )
       .where('location_members.user_id', user.id);
 
+      console.log('Items encontrados para el usuario:', items);
+      
+
     return items;
   }
 }

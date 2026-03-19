@@ -184,6 +184,7 @@ export class ItemUnitsService {
         'items.name',
         'items.model',
         'items.brand',
+        'items.type',
       )
       .where({
         'item_units.id': unitId,

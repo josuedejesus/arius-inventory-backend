@@ -19,6 +19,8 @@ import { RequisitionLinePhotosModule } from './requisition_line_photos/requisiti
 import { ItemUnitUsageLogsModule } from './item_unit_usage_logs/item_unit_usage_logs.module';
 import { RequisitionLineAccessoriesModule } from './requisition-line-accessories/requisition-line-accessories.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { PdfService } from './pdf/pdf.service';
+import { PdfModule } from './pdf/pdf.module';
 
 @Module({
   imports: [
@@ -48,9 +50,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       database: process.env.DB_NAME,
       autoLoadEntities: true,
       synchronize: false,
-    })
+    }),
+    PdfModule
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, PdfService],
 })
 export class AppModule {}

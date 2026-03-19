@@ -39,5 +39,6 @@ import { ReturnHandler } from './handlers/return.handler';
     EventsModule,
     ItemUnitUsageLogsModule,
   ],
+  exports: [RequisitionsService],
 })
 export class RequisitionsModule {}

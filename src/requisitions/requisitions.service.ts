@@ -768,22 +768,67 @@ export class RequisitionsService {
     trx: any = null,
   ): Promise<RequisitionViewModel> {
     const db = trx || this.db;
+
     const requisition: RequisitionViewModel = await db('requisitions as r')
       .join('persons as p', 'p.id', 'r.requested_by')
+
       .leftJoin('persons as requestor', 'requestor.id', 'r.requested_by')
       .leftJoin('persons as approver', 'approver.id', 'r.approved_by')
+
       .join(
         'locations as destination',
         'destination.id',
         'r.destination_location_id',
       )
+
+      // 🔥 MISMAS JOINS QUE findAll
+      .leftJoin('requisition_lines as rl', function () {
+        this.on('rl.requisition_id', '=', 'r.id').andOnNotNull(
+          'rl.item_unit_id',
+        );
+      })
+      .leftJoin('requisition_lines as rlr', 'rlr.return_of_line_id', 'rl.id')
+      .leftJoin('requisitions as rr', 'rr.id', 'rlr.requisition_id')
+
+      // 🔥 GROUP BY NECESARIO
+      .groupBy(
+        'r.id',
+        'p.name',
+        'destination.id',
+        'destination.name',
+        'destination.location',
+        'requestor.name',
+        'approver.name',
+      )
+
       .select(
         'r.*',
         'p.name as requestor_name',
+
         'destination.id as destination_id',
         'destination.name as destination_location_name',
+        'destination.location as destination_address',
+
         'requestor.name as requestor_name',
         'approver.name as approver_name',
+
+        // 🔥 NUEVO
+        db.raw('COUNT(DISTINCT rl.id) as total_units'),
+
+        db.raw(`
+        COUNT(DISTINCT CASE 
+          WHEN rr.status = 'DONE' THEN rlr.id 
+        END) as returned_units
+      `),
+
+        db.raw(`
+        CASE
+          WHEN r.type NOT IN ('RENT','TRANSFER') THEN NULL
+          WHEN COUNT(DISTINCT CASE WHEN rr.status = 'DONE' THEN rlr.id END) = 0 THEN 'NONE'
+          WHEN COUNT(DISTINCT CASE WHEN rr.status = 'DONE' THEN rlr.id END) = COUNT(DISTINCT rl.id) THEN 'FULL'
+          ELSE 'PARTIAL'
+        END as return_status
+      `),
       )
       .where('r.id', requisitionId)
       .first();
