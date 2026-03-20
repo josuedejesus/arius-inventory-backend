@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CreatePersonDto } from './dto/create-person.dto';
@@ -24,8 +25,8 @@ export class PersonsController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  async getPersons() {
-    return this.personsService.findAll();
+  async findAll(@Query() query: any) {
+    return this.personsService.findAll(query);
   }
 
   @Get(':id/locations')

@@ -16,6 +16,7 @@ import { UserRole } from 'src/users/enums/user-role.enum';
 import { ItemUnitStatus } from './enums/item-unit-status.enum';
 import { RequisitionStatus } from 'src/requisitions/enums/requisition-status.enum';
 import { filter } from 'rxjs';
+import { ItemUnitFilterDto } from './dto/item-unit-filter.dto';
 
 @Injectable()
 export class ItemUnitsService {
@@ -28,7 +29,7 @@ export class ItemUnitsService {
   ) {}
 
   async create(dto: CreateItemUnitDto) {
-    return this.db.transaction(async (trx) => {
+    return this.db.transaction(async (trx: any) => {
       const item = await this.itemsService.getItem(dto.item_id, trx);
 
       if (!item) {
@@ -195,7 +196,21 @@ export class ItemUnitsService {
   async findByItemId(itemId: string) {
     return this.db('item_units')
       .join('items', 'items.id', 'item_units.item_id')
-      .select('item_units.*', 'items.name', 'items.brand', 'items.model')
+      .join('units', 'units.id', 'items.unit_id')
+      .leftJoin('locations', 'locations.id', 'item_units.location_id')
+      .select(
+        'item_id',
+        'item_units.*',
+        'item_units.id as item_unit_id',
+        'items.name',
+        'items.brand',
+        'items.model',
+        'items.type',
+        'items.tracking',
+        'units.code as unit_code',
+        'units.name as unit_name',
+        'locations.name as location',
+      )
       .where('item_units.item_id', itemId)
       .orderBy('item_units.id', 'asc');
   }
@@ -380,12 +395,7 @@ export class ItemUnitsService {
       .orderBy('items.name', 'asc');
   }
 
-  async findAll(filters?: {
-    status?: string;
-    locationId?: number;
-    requireLocation?: boolean;
-    withoutLocation?: boolean;
-  }) {
+  async findAll(filters?: ItemUnitFilterDto) {
     console.log(filters);
     const query = this.db('item_units')
       .join('items', 'items.id', 'item_units.item_id')
@@ -408,14 +418,6 @@ export class ItemUnitsService {
 
     if (filters?.status) {
       query.where('item_units.status', filters.status);
-    }
-
-    if (filters?.requireLocation) {
-      query.whereNotNull('item_units.location_id');
-    }
-
-    if (filters?.withoutLocation) {
-      query.whereNull('item_units.location_id');
     }
 
     if (filters?.locationId !== undefined) {
@@ -652,10 +654,8 @@ export class ItemUnitsService {
         this.db.raw('COUNT(*) as total_units'),
 
         this.db.raw(`
-        COUNT(*) FILTER (
-          WHERE iu.status = 'AVAILABLE' 
-          AND iu.location_id IS NOT NULL
-        ) as available_units
+        COUNT(*) FILTER (WHERE iu.status = 'AVAILABLE') 
+        as available_units
       `),
 
         this.db.raw(`
@@ -677,7 +677,7 @@ export class ItemUnitsService {
             as reserved_units
           `),
         this.db.raw(`
-        COUNT(*) FILTER (WHERE iu.location_id IS NULL and iu.status = 'AVAILABLE') 
+        COUNT(*) FILTER (WHERE iu.status = 'CREATED') 
         as without_location
       `),
       )

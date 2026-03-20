@@ -7,27 +7,68 @@ import {
   Post,
   Put,
   Query,
-  UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ItemsService } from './items.service';
 import { CreateItemDto } from './dto/create-item.dto';
-import { ItemAccessoriesService } from 'src/item-accessories/item-accessories.service';
 import { UpdateItemDto } from './dto/update-item.dto';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { multerConfig } from 'src/multer.config';
-import { get } from 'http';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
-import { stat } from 'fs';
 import { ItemType } from './enums/item-type.enum';
+import { S3Service } from 'src/s3/s3.service';
+import { UserRole } from 'src/users/enums/user-role.enum';
+import multer from 'multer';
 
 @Controller('items')
 export class ItemsController {
-  constructor(private readonly itemsService: ItemsService) {}
+  constructor(
+    private readonly itemsService: ItemsService,
+    private readonly s3Service: S3Service,
+  ) {}
+
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.ADMINISTRATIVE_MANAGER,
+    UserRole.WAREHOUSE_MANAGER,
+  )
+  @UseInterceptors(
+    FilesInterceptor('images', 10, {
+      storage: multer.memoryStorage(),
+    }),
+  )
+  async create(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() dto: CreateItemDto,
+  ) {
+    let uploadedImages: string[] = [];
+
+    if (files?.length) {
+      uploadedImages = await Promise.all(
+        files.map((file) => this.s3Service.uploadFile(file, 'item-units')),
+      );
+    }
+
+    if (dto.item_units?.length) {
+      dto.item_units = dto.item_units.map((unit, i) => ({
+        ...unit,
+        image_path: uploadedImages[i] || undefined,
+      }));
+    }
+
+    const item = await this.itemsService.create(dto);
+
+    return {
+      success: true,
+      message: `Articulo creado exitosamente.`,
+    };
+  }
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -39,6 +80,13 @@ export class ItemsController {
     return {
       data: items,
     };
+  }
+
+  @Get(':locationId/get-stock')
+  @UseGuards(JwtAuthGuard)
+  async getStockByLocation(@Param('locationId', ParseIntPipe) locationId: number) {
+    const stock = await this.itemsService.getStockByLocation(locationId);
+    return stock;
   }
 
   @Get('get-stats')
@@ -99,7 +147,11 @@ export class ItemsController {
 
   @Put(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.ADMINISTRATIVE_MANAGER,
+    UserRole.WAREHOUSE_MANAGER,
+  )
   async updateItem(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateItemDto,
@@ -109,29 +161,6 @@ export class ItemsController {
     return {
       success: true,
       message: `Articulo ${dto.name} actualizado exitosamente.`,
-    };
-  }
-
-  @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  @UseInterceptors(FilesInterceptor('images', 10, multerConfig))
-  async create(
-    @UploadedFiles() files: Express.Multer.File[],
-    @Body() dto: CreateItemDto,
-  ) {
-    if (files?.length && dto.item_units?.length) {
-      dto.item_units = dto.item_units.map((unit, i) => ({
-        ...unit,
-        image_path: files[i] ? `item-units/${files[i].filename}` : undefined,
-      }));
-    }
-
-    const item = await this.itemsService.create(dto);
-
-    return {
-      success: true,
-      message: `Articulo creado exitosamente.`,
     };
   }
 }

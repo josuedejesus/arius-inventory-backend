@@ -10,14 +10,13 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { RequisitionLinePhotosService } from './requisition_line_photos.service';
-import { CreateRequisitionDto } from 'src/requisitions/dto/create-requisition.dto';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-import { multerConfig } from 'src/multer.config';
 import { CreateRequisitionLinePhotosDto } from './dto/create-requisition-line-photos.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
-
+import { S3Service } from 'src/s3/s3.service';
+import multer from 'multer';
 @Controller('requisition-line-photos')
 export class RequisitionLinePhotosController {
   constructor(
@@ -27,7 +26,9 @@ export class RequisitionLinePhotosController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'WAREHOUSE_MANAGER')
-  @UseInterceptors(FilesInterceptor('images', 10, multerConfig))
+  @UseInterceptors(FilesInterceptor('images', 10, {
+    storage: multer.memoryStorage(),
+  }))
   async createMany(
     @UploadedFiles() files: Express.Multer.File[],
     @Body() dto: CreateRequisitionLinePhotosDto,

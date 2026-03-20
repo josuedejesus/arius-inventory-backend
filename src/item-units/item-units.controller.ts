@@ -22,19 +22,29 @@ import { GetByTypeDto } from './dto/get-by-type.dto';
 import { stat } from 'fs';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { RequisitionType } from 'src/requisitions/enums/requisition-type';
+import { S3Service } from 'src/s3/s3.service';
+import { ItemUnitFilterDto } from './dto/item-unit-filter.dto';
 
 @Controller('item-units')
 export class ItemUnitsController {
-  constructor(private readonly itemUnitsService: ItemUnitsService) {}
+  constructor(
+    private readonly itemUnitsService: ItemUnitsService,
+    private readonly s3Service: S3Service,
+  ) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('image', multerConfig))
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: multer.memoryStorage(),
+    }),
+  )
   async create(
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: CreateItemUnitDto,
   ) {
     if (file) {
-      dto.image_path = `item-units/${file.filename}`;
+      const imageUrl = await this.s3Service.uploadFile(file, 'item-units');
+      dto.image_path = imageUrl;
     }
     const itemUnit = await this.itemUnitsService.create(dto);
 
@@ -45,14 +55,21 @@ export class ItemUnitsController {
   }
 
   @Put(':id')
-  @UseInterceptors(FileInterceptor('image', multerConfig))
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: multer.memoryStorage(),
+    }),
+  )
   async updateItemUnit(
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: UpdateItemUnitDto,
   ) {
     if (file) {
-      dto.image_path = `item-units/${file.filename}`;
+      const extension = file.originalname.split('.').pop();
+      const key = `arius/item-units/${id}.${extension}`;
+      const imageUrl = await this.s3Service.uploadFileWithKey(file, key);
+      dto.image_path = `${imageUrl}?t=${Date.now()}`;
     }
 
     const item = await this.itemUnitsService.update(dto, id);
@@ -211,18 +228,8 @@ export class ItemUnitsController {
   }
 
   @Get()
-  async findAll(
-    @Query('status') status?: string,
-    @Query('locationId') locationId?: number,
-    @Query('requireLocation') requireLocation?: boolean,
-    @Query('withoutLocation') withoutLocation?: boolean,
-  ) {
-    const itemUnits = await this.itemUnitsService.findAll({
-      status,
-      locationId,
-      requireLocation,
-      withoutLocation
-    });
+  async findAll(@Query() filters?: ItemUnitFilterDto) {
+    const itemUnits = await this.itemUnitsService.findAll(filters);
 
     return {
       success: true,

@@ -21,6 +21,7 @@ import { RequisitionLineAccessoriesModule } from './requisition-line-accessories
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PdfService } from './pdf/pdf.service';
 import { PdfModule } from './pdf/pdf.module';
+import { S3Module } from './s3/s3.module';
 
 @Module({
   imports: [
@@ -51,7 +52,8 @@ import { PdfModule } from './pdf/pdf.module';
       autoLoadEntities: true,
       synchronize: false,
     }),
-    PdfModule
+    PdfModule,
+    S3Module
   ],
   controllers: [AppController],
   providers: [AppService, PdfService],

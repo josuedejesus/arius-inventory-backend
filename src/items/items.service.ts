@@ -12,6 +12,7 @@ import { UpdateItemDto } from './dto/update-item.dto';
 import { ItemUnitsService } from 'src/item-units/item-units.service';
 import { ItemType } from './enums/item-type.enum';
 import { ItemViewModel } from './dto/item-view-model';
+import { PagedRequestDto } from 'src/requisitions/dto/PaginationDto';
 
 @Injectable()
 export class ItemsService {
@@ -80,7 +81,7 @@ export class ItemsService {
     let query = this.db('items')
       .join('units', 'units.id', 'items.unit_id')
       .select('items.*', 'units.name as unit_name', 'units.code as unit_code')
-      .orderBy('items.name', 'asc');
+      .orderBy('items.updated_at', 'desc');
 
     if (type) {
       query = query.where('items.type', type);
@@ -372,5 +373,39 @@ export class ItemsService {
       `),
       )
       .groupBy('i.id', 'i.name', 'i.minimum_stock');
+  }
+
+  async getStockByLocation(locationId: number) {
+    const db = this.db;
+
+    return db('items as i')
+      .where('i.type', 'SUPPLY')
+      .leftJoin('stock_moves as sm', 'sm.item_id', 'i.id')
+      .leftJoin('locations as ld', 'ld.id', 'sm.destination_location_id')
+      .leftJoin('locations as ls', 'ls.id', 'sm.source_location_id')
+      .select(
+        'i.*',
+        db.raw(
+          `
+        COALESCE(
+          SUM(CASE WHEN ld.id = ? THEN sm.quantity ELSE 0 END)
+          -
+          SUM(CASE WHEN ls.id = ? THEN sm.quantity ELSE 0 END),
+        0) as stock
+      `,
+          [locationId, locationId],
+        ),
+      )
+      .groupBy('i.id', 'i.name', 'i.minimum_stock')
+      .havingRaw(
+        `
+      COALESCE(
+        SUM(CASE WHEN ld.id = ? THEN sm.quantity ELSE 0 END)
+        -
+        SUM(CASE WHEN ls.id = ? THEN sm.quantity ELSE 0 END),
+      0) > 0
+    `,
+        [locationId, locationId],
+      );
   }
 }

@@ -6,10 +6,11 @@ import { UsersService } from 'src/users/users.service';
 import { PersonsService } from 'src/persons/persons.service';
 import { UsersModule } from 'src/users/users.module';
 import { PersonsModule } from 'src/persons/persons.module';
+import { S3Module } from 'src/s3/s3.module';
 
 @Module({
   controllers: [RequisitionLinePhotosController],
   providers: [RequisitionLinePhotosService],
-  imports: [DatabaseModule, UsersModule, PersonsModule],
+  imports: [DatabaseModule, UsersModule, PersonsModule, S3Module],
 })
 export class RequisitionLinePhotosModule {}
