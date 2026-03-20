@@ -76,6 +76,7 @@ export class PersonsService {
         role: dto.role,
         address: dto.address,
         rtn: dto.rtn,
+        updated_at: new Date(),
       });
     } catch (error: any) {
       if (error?.code === '23505' || error?.driverError?.code === '23505') {
@@ -156,10 +157,6 @@ export class PersonsService {
         'items.tracking',
       )
       .where('location_members.user_id', user.id);
-
-      console.log('Items encontrados para el usuario:', items);
-      
-
     return items;
   }
 }

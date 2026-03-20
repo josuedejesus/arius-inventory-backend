@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
-import * as puppeteer from 'puppeteer';
+import * as puppeteer from 'puppeteer-core';
+import chromium from 'chrome-aws-lambda';
 import * as fs from 'fs';
 import * as path from 'path';
 import { RequisitionLinesService } from 'src/requisition-lines/requisition-lines.service';
@@ -15,6 +16,7 @@ export class PdfService {
   ) {}
   async generateRequisitionPdf(id: number): Promise<Buffer> {
     const browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
       headless: true,
     });
 
