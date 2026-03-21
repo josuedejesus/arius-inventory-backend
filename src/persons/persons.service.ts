@@ -144,31 +144,5 @@ return qb
     return locations;
   }
 
-  async getItems(id: number) {
-    const user = await this.userRepository.findOne({
-      where: { person: { id } },
-      relations: ['person'],
-    });
-
-    if (!user) {
-      throw new NotFoundException('Usuario no encontrado para esta persona.');
-    }
-    const items = await this.db('item_units')
-      .join(
-        'location_members',
-        'item_units.location_id',
-        'location_members.location_id',
-      )
-      .join('items', 'item_units.item_id', 'items.id')
-      .select(
-        'item_units.*',
-        'items.name',
-        'items.brand',
-        'items.model',
-        'items.type',
-        'items.tracking',
-      )
-      .where('location_members.user_id', user.id);
-    return items;
-  }
+  
 }

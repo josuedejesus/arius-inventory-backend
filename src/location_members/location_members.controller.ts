@@ -1,5 +1,7 @@
-import { Controller, Get, Inject, Param } from '@nestjs/common';
+import { Controller, Get, Inject, Param, UseGuards } from '@nestjs/common';
 import { LocationMembersService } from './location_members.service';
+import { use } from 'passport';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
 @Controller('location-members')
 export class LocationMembersController {
@@ -15,5 +17,12 @@ export class LocationMembersController {
             success: true,
             data: members,
         }
+    }
+
+    @Get(':personId/person')
+    @UseGuards(JwtAuthGuard)
+    async getByPerson(@Param('personId') personId: string) {
+        const members = await this.locatioMembersService.getByPersonId(Number(personId));
+        return members;
     }
 }

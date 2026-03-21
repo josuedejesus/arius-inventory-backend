@@ -217,6 +217,14 @@ export class ItemUnitsController {
     return logs;
   }
 
+  @Get(':userId/user')
+  @UseGuards(JwtAuthGuard)
+  async findByUserId(@Param('userId', ParseIntPipe) userId: number) {
+    const items = await this.itemUnitsService.findByUser(userId);
+    console.log(items);
+    return items;
+  }
+
   @Get(':id')
   async findById(@Param('id') id: string) {
     const item = await this.itemUnitsService.findById(id);

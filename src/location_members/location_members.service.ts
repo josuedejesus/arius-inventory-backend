@@ -5,7 +5,7 @@ export class LocationMembersService {
   constructor(@Inject('KNEX') private readonly db: any) {}
 
   async createMany(data: any[], trx: any = []) {
-     (data);
+    data;
     const db = trx || this.db;
     return db('location_members').insert(data).returning('*');
   }
@@ -19,14 +19,21 @@ export class LocationMembersService {
 
   async getByLocationId(locationId: number) {
     return this.db('location_members')
-    .join('users', 'location_members.user_id', 'users.id')
-    .join('persons', 'users.person_id', 'persons.id')
-    .where({
-        location_id: locationId
-    })
-    .select(
-        'users.id',
-        'persons.name'
-    );
+      .join('users', 'location_members.user_id', 'users.id')
+      .join('persons', 'users.person_id', 'persons.id')
+      .where({
+        location_id: locationId,
+      })
+      .select('users.id', 'persons.name');
+  }
+
+  async getByPersonId(userId: number) {
+    return this.db('location_members')
+      .join('users', 'location_members.user_id', 'users.id')
+      .join('locations', 'location_members.location_id', 'locations.id')
+      .where({
+        'users.id': userId,
+      })
+      .select('locations.*');
   }
 }

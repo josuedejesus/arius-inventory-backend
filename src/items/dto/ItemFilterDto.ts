@@ -1,4 +1,10 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, isString } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  isString,
+} from 'class-validator';
 import { ItemType } from '../enums/item-type.enum';
 
 export class ItemFilterDto {
@@ -17,4 +23,9 @@ export class ItemFilterDto {
   @IsOptional()
   @IsEnum(ItemType)
   type?: ItemType;
+
+  //extra filters for locations
+  @IsOptional()
+  @IsString()
+  location_id?: string;
 }

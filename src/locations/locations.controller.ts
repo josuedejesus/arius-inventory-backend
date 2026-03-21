@@ -64,6 +64,14 @@ export class LocationsController {
     };
   }
 
+  @Get(':userId/user')
+  async findByUserId(@Param('userId') userId: string) {
+    const locations = await this.locationsService.findByUser(Number(userId));
+    console.log(locations);
+    return locations;
+  }
+
+
   @Get(':locationId')
   async findById(@Param('locationId') locationId: string) {
     const location = await this.locationsService.findById(locationId);
@@ -77,20 +85,6 @@ export class LocationsController {
   @Get()
   @UseGuards(JwtAuthGuard)
   async findAllLocations(@Req() req: any) {
-    /*const user = req.user;
-
-    const privilegedRoles = ['ADMIN', 'WAREHOUSE_MANAGER', 'OPERATION_MANAGER'];
-
-    let locations = [];
-
-    if (privilegedRoles.includes(user.role)) {
-      locations = await this.locationsService.getLocations();
-    } else {
-      locations = await this.locationsService.getLocations({
-        userId: user.person_id,
-      });
-    }*/
-
     const locations = await this.locationsService.findAll();
 
     return {

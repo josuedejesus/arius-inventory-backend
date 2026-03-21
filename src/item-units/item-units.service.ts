@@ -698,11 +698,11 @@ export class ItemUnitsService {
       .select(
         'p.id as person_id',
         'p.name as person_name',
+        'u.id as user_id',
         db.raw('COUNT(DISTINCT l.id) as total_locations'),
         db.raw('COUNT(iu.id) as total_units'),
       )
-
-      .groupBy('p.id', 'p.name')
+      .groupBy('p.id', 'p.name', 'u.id')
       .orderBy('p.name');
   }
 
@@ -730,5 +730,31 @@ export class ItemUnitsService {
       total_usage: totalUsage,
       locations,
     };
+  }
+
+  async findByUser(personId: number) {
+    const user = await this.usersServices.findByPersonId(personId);
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado para esta persona.');
+    }
+
+    const items = await this.db('item_units')
+      .join(
+        'location_members',
+        'item_units.location_id',
+        'location_members.location_id',
+      )
+      .join('items', 'item_units.item_id', 'items.id')
+      .select(
+        'item_units.*',
+        'items.name',
+        'items.brand',
+        'items.model',
+        'items.type',
+        'items.tracking',
+      )
+      .where('location_members.user_id', user.id);
+    return items;
   }
 }
