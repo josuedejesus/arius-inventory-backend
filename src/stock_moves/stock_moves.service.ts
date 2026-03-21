@@ -10,34 +10,87 @@ export class StockMovesService {
     return db('stock_moves').insert(items);
   }
 
-  async findByLocation(locationId: string) {
-  return this.db('stock_moves')
-    .join('items', 'items.id', 'stock_moves.item_id')
+  async findByLocation(locationId: string, limit = 10) {
+    return (
+      this.db('stock_moves as sm')
+        .join('items as i', 'i.id', 'sm.item_id')
+        .join('units as u', 'u.id', 'i.unit_id')
 
-    // unidad de medida (SIEMPRE)
-    .join('units', 'units.id', 'items.unit_id')
+        .leftJoin('item_units as iu', 'iu.id', 'sm.item_unit_id')
 
-    // unidad física (OPCIONAL)
-    .leftJoin('item_units', 'item_units.id', 'stock_moves.item_unit_id')
+        .leftJoin(
+          { source_location: 'locations' },
+          'source_location.id',
+          'sm.source_location_id',
+        )
+        .leftJoin(
+          { destination_location: 'locations' },
+          'destination_location.id',
+          'sm.destination_location_id',
+        )
 
-    .select(
-      'stock_moves.*',
-      'items.name as item_name',
-      'items.model as item_model',
-      'items.brand as item_brand',
-      'units.code as unit_code',
-      'item_units.internal_code as internal_code'
-    )
+        .select(
+          'sm.id',
+          'sm.quantity',
+          'sm.source_location_id',
+          'sm.destination_location_id',
 
-    .where(function () {
-      this.where('stock_moves.source_location_id', locationId)
-          .orWhere('stock_moves.destination_location_id', locationId);
-    })
+          'i.name as item_name',
+          'i.model as item_model',
+          'i.brand as item_brand',
 
-    .orderBy('stock_moves.id', 'desc');
-}
+          'u.code as unit_code',
 
+          'iu.internal_code',
 
+          'source_location.name as source_location_name',
+          'destination_location.name as destination_location_name',
+
+          // 🔥 movement_type
+          this.db.raw(
+            `
+        CASE 
+          WHEN sm.destination_location_id = ? THEN 'ENTRY'
+          WHEN sm.source_location_id = ? THEN 'EXIT'
+        END as movement_type
+      `,
+            [locationId, locationId],
+          ),
+
+          // 🔥 movement_date CORRECTO
+          this.db.raw(
+            `
+        CASE 
+          WHEN sm.destination_location_id = ? THEN sm.received_at
+          WHEN sm.source_location_id = ? THEN sm.executed_at
+          ELSE COALESCE(sm.executed_at, sm.received_at)
+        END as movement_date
+      `,
+            [locationId, locationId],
+          ),
+        )
+
+        .where(function () {
+          this.where('sm.source_location_id', locationId).orWhere(
+            'sm.destination_location_id',
+            locationId,
+          );
+        })
+
+        // 🔥 ordenar por la fecha correcta
+        .orderByRaw(
+          `
+      CASE 
+        WHEN sm.destination_location_id = ${locationId} THEN sm.received_at
+        WHEN sm.source_location_id = ${locationId} THEN sm.executed_at
+        ELSE COALESCE(sm.executed_at, sm.received_at)
+      END DESC
+    `,
+        )
+
+        .limit(limit)
+    );
+  }
 
   async findByUnitId(unitId: string) {
     return this.db('stock_moves')

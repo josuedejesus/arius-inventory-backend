@@ -6,7 +6,7 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 export class StockMovesController {
   constructor(private readonly stockMovesService: StockMovesService) {}
 
-  @Get('get-by-location/:locationId')
+  @Get(':locationId/location')
   async findByLocation(@Param('locationId') locationId: string) {
     const movements = await this.stockMovesService.findByLocation(locationId);
 

@@ -174,10 +174,12 @@ export class ItemsService {
         existingAccessories.map((m) => m.accessory_id),
       );
 
+      // 🔷 agregar
       const toAdd = dto.accessories.filter((m) => !existingIds.has(m.id));
 
+      // 🔷 eliminar (FIX)
       const toRemove = existingAccessories
-        .filter((m: any) => !incomingIds.has(m.id))
+        .filter((m: any) => !incomingIds.has(m.accessory_id))
         .map((m: any) => m.id);
 
       const toAddMapped = toAdd.map((m) => ({
