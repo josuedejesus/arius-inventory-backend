@@ -11,7 +11,6 @@ export class ItemAccessoriesController {
   async findByItem(@Param('itemId') itemId: string) {
     const accessories = await this.itemAccessoriesService.findByItem(itemId);
 
-    console.log('accesorios', accessories);
 
     return {
       success: true,

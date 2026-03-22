@@ -7,9 +7,12 @@ import {
   IsOptional,
   IsPhoneNumber,
   IsString,
+  ValidateNested,
 } from 'class-validator';
 import { PersonRole } from '../enums/person-role.enum';
 import { Type } from 'class-transformer';
+import { CreateUserDTO } from 'src/users/dto/create-user.dto';
+import { UpdateUserDto } from 'src/users/dto/update-user.dto';
 
 export class UpdatePersonDto {
   @IsString()
@@ -36,4 +39,10 @@ export class UpdatePersonDto {
   @IsString()
   @IsOptional()
   rtn: string;
+
+  //user
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => UpdateUserDto)
+    user?: UpdateUserDto;
 }

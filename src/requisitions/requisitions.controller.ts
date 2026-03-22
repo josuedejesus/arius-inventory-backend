@@ -142,10 +142,8 @@ export class RequisitionsController {
       userFilter = { personId: user.person_id };
     }
 
-    console.log('Request:', request);
 
     const pagedResult = await this.requisitionsService.findAll(userFilter, request);
-    console.log('Paged Result:', pagedResult);
     return pagedResult;
   }
 }

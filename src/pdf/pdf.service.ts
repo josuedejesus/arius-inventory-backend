@@ -28,7 +28,6 @@ export class PdfService {
 
     const lines = await this.requisitionLinesService.findByRequisitionId(id);
 
-    console.log(requisition);
 
     const page = await browser.newPage();
 

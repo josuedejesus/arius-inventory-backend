@@ -70,13 +70,39 @@ export class ItemsController {
     };
   }
 
+  @Put(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.ADMINISTRATIVE_MANAGER,
+    UserRole.WAREHOUSE_MANAGER,
+  )
+  async updateItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateItemDto,
+  ) {
+    const item = await this.itemsService.update(dto, id);
+
+    return {
+      success: true,
+      message: `Articulo ${dto.name} actualizado exitosamente.`,
+    };
+  }
+
   @Get()
   @UseGuards(JwtAuthGuard)
   async findAll(@Query('type') type?: ItemType) {
     const items = await this.itemsService.findAll(type);
 
-    console.log(items);
+    return {
+      data: items,
+    };
+  }
 
+  @Get('get-all-with-properties')
+  @UseGuards(JwtAuthGuard)
+  async findAllWithProperties(@Query('locationId') locationId?: number) {
+    const items = await this.itemsService.findAllWithProperties({ locationId });
     return {
       data: items,
     };
@@ -84,7 +110,9 @@ export class ItemsController {
 
   @Get(':locationId/get-stock')
   @UseGuards(JwtAuthGuard)
-  async getStockByLocation(@Param('locationId', ParseIntPipe) locationId: number) {
+  async getStockByLocation(
+    @Param('locationId', ParseIntPipe) locationId: number,
+  ) {
     const stock = await this.itemsService.getStockByLocation(locationId);
     return stock;
   }
@@ -100,9 +128,8 @@ export class ItemsController {
   }
 
   @Get('get-available-supplies')
-  async findAllAvailableSupplies() {
-    const supplies = await this.itemsService.findAllAvailableSupplies();
-
+  async getAvailableSupplies() {
+    const supplies = await this.itemsService.getAvailableSupplies();
     return {
       success: true,
       data: supplies,
@@ -122,7 +149,6 @@ export class ItemsController {
   async getSuppliesStats() {
     const stats = await this.itemsService.getSuppliesStats();
 
-    console.log(stats);
     return {
       data: stats,
     };
@@ -142,25 +168,6 @@ export class ItemsController {
     return {
       success: true,
       data: item,
-    };
-  }
-
-  @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(
-    UserRole.ADMIN,
-    UserRole.ADMINISTRATIVE_MANAGER,
-    UserRole.WAREHOUSE_MANAGER,
-  )
-  async updateItem(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateItemDto,
-  ) {
-    const item = await this.itemsService.update(dto, id);
-
-    return {
-      success: true,
-      message: `Articulo ${dto.name} actualizado exitosamente.`,
     };
   }
 }

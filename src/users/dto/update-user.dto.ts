@@ -2,14 +2,6 @@ import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'c
 import { UserRole } from '../enums/user-role.enum';
 
 export class UpdateUserDto {
-  @IsNumber()
-  @IsNotEmpty()
-  id: number;
-
-  @IsString()
-  @IsNotEmpty()
-  name: string;
-
   @IsString()
   @IsNotEmpty()
   username: string;

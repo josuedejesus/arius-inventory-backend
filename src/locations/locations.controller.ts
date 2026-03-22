@@ -67,7 +67,6 @@ export class LocationsController {
   @Get(':userId/user')
   async findByUserId(@Param('userId') userId: string) {
     const locations = await this.locationsService.findByUser(Number(userId));
-    console.log(locations);
     return locations;
   }
 
@@ -75,7 +74,6 @@ export class LocationsController {
   @Get(':locationId')
   async findById(@Param('locationId') locationId: string) {
     const location = await this.locationsService.findById(locationId);
-    console.log(location);
     return {
       success: true,
       data: location,

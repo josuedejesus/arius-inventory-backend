@@ -30,7 +30,7 @@ export class ItemUnitsService {
 
   async create(dto: CreateItemUnitDto) {
     return this.db.transaction(async (trx: any) => {
-      const item = await this.itemsService.getItem(dto.item_id, trx);
+      const item = await this.itemsService.findById(dto.item_id, trx);
 
       if (!item) {
         throw new NotFoundException('Articulo no encontrado');
@@ -133,7 +133,7 @@ export class ItemUnitsService {
 
   async update(dto: UpdateItemUnitDto, id: number) {
     return this.db.transaction(async (trx) => {
-      const item = await this.itemsService.getItem(String(dto.item_id), trx);
+      const item = await this.itemsService.findById(String(dto.item_id), trx);
 
       if (!item) {
         throw new NotFoundException('Articulo no encontrado');
@@ -215,12 +215,14 @@ export class ItemUnitsService {
       .orderBy('item_units.id', 'asc');
   }
 
-  private async calculateStock(
+  async calculateStock(
     itemId: string,
     locationId: string,
     unitName: string,
+    trx: any = null,
   ) {
-    const result = await this.db('stock_moves')
+    const db = trx || this.db;
+    const result = await db('stock_moves')
       .where('item_id', itemId)
       .andWhere((qb) => {
         qb.where('destination_location_id', locationId).orWhere(
@@ -396,7 +398,6 @@ export class ItemUnitsService {
   }
 
   async findAll(filters?: ItemUnitFilterDto) {
-    console.log(filters);
     const query = this.db('item_units')
       .join('items', 'items.id', 'item_units.item_id')
       .join('units', 'units.id', 'items.unit_id')
@@ -569,35 +570,30 @@ export class ItemUnitsService {
       requisitionType === RequisitionType.ADJUSTMENT ||
       requisitionType === RequisitionType.PURCHASE_RECEIPT
     ) {
-      query.whereNull('location_id');
+      query.where('item_units.status', ItemUnitStatus.CREATED);
       return await query;
-    } else if (requisitionType === RequisitionType.TRANSFER) {
-      console.log('Finding by transfer with destinationId', destinationId);
-      query
-        .where(function () {
-          this.where('item_units.status', ItemUnitStatus.RENTED);
-        })
-        .whereNotNull('item_units.location_id');
-
-      return await query;
-    } else if (requisitionType === RequisitionType.RETURN) {
+    } else if (
+      requisitionType === RequisitionType.RETURN ||
+      requisitionType === RequisitionType.TRANSFER
+    ) {
       if (
         user.role === UserRole.ADMIN ||
         user.role === UserRole.ADMINISTRATIVE_MANAGER ||
         user.role === UserRole.WAREHOUSE_MANAGER
       ) {
-        query.where('status', ItemUnitStatus.RENTED);
+        query.where('item_units.status', ItemUnitStatus.RENTED);
         return await query;
       } else {
         const userLocations = await this.locationsService.findByUser(user.id);
-        const userLocationIds = userLocations.map((l) => l.id);
+        const userLocationIds = userLocations.map((l: any) => l.id);
         query.whereIn('item_units.location_id', userLocationIds);
         return await query;
       }
     } else if (requisitionType === RequisitionType.RENT) {
-      query
-        .where('status', ItemUnitStatus.AVAILABLE)
-        .whereNotNull('location_id');
+      query.where('item_units.status', ItemUnitStatus.AVAILABLE);
+      return await query;
+    } else if (requisitionType === RequisitionType.MAINTENANCE) {
+      query.where('item_units.status', ItemUnitStatus.AVAILABLE);
       return await query;
     }
 
@@ -647,43 +643,63 @@ export class ItemUnitsService {
     return item;
   }
 
-  async getStats() {
-    const stats = await this.db('item_units as iu')
-      .leftJoin('locations as l', 'l.id', 'iu.location_id')
-      .select(
-        this.db.raw('COUNT(*) as total_units'),
+  async getStatusStats() {
+    const statuses = Object.values(ItemUnitStatus);
 
-        this.db.raw(`
-        COUNT(*) FILTER (WHERE iu.status = 'AVAILABLE') 
-        as available_units
-      `),
+    const selects = [this.db.raw('COUNT(*) as total_units')];
 
-        this.db.raw(`
-        COUNT(*) FILTER (WHERE iu.status = 'RENTED') 
-        as rented_units
-      `),
+    for (const status of statuses) {
+      selects.push(
+        this.db.raw(
+          `COUNT(*) FILTER (WHERE iu.status = ?) as ${status.toLowerCase()}`,
+          [status],
+        ),
+      );
+    }
 
-        this.db.raw(`
-        COUNT(*) FILTER (WHERE iu.status = 'SOLD') 
-        as sold_units
-      `),
+    const result = await this.db('item_units as iu').select(selects).first();
 
-        this.db.raw(`
-        COUNT(*) FILTER (WHERE iu.status = 'IN_TRANSIT') 
-        as in_transit_units
-      `),
-        this.db.raw(`
-            COUNT(*) FILTER (WHERE iu.status = 'RESERVED') 
-            as reserved_units
-          `),
-        this.db.raw(`
-        COUNT(*) FILTER (WHERE iu.status = 'CREATED') 
-        as without_location
-      `),
-      )
+    // 🔥 limpiar valores en 0
+    const filtered: any = {};
+
+    for (const key in result) {
+      if (key === 'total_units' || Number(result[key]) > 0) {
+        filtered[key] = result[key];
+      }
+    }
+
+    return filtered;
+  }
+
+  async getStatusStatsByUser(userId: number) {
+    const statuses = Object.values(ItemUnitStatus);
+
+    const selects = [this.db.raw('COUNT(*) as total_units')];
+
+    for (const status of statuses) {
+      selects.push(
+        this.db.raw(
+          `COUNT(*) FILTER (WHERE iu.status = ?) as ${status.toLowerCase()}`,
+          [status],
+        ),
+      );
+    }
+
+    const result = await this.db('item_units as iu')
+      .join('location_members as lm', 'lm.location_id', 'iu.location_id')
+      .where('lm.user_id', userId)
+      .select(selects)
       .first();
 
-    return stats;
+    const filtered: any = {};
+
+    for (const key in result) {
+      if (key === 'total_units' || Number(result[key]) > 0) {
+        filtered[key] = Number(result[key]);
+      }
+    }
+
+    return filtered;
   }
 
   async getStatsByUsers() {

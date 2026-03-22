@@ -16,12 +16,9 @@ import { CreateItemUnitDto } from './dto/create-item-unit.dto';
 import { ItemUnitsService } from './item-units.service';
 import { UpdateItemUnitDto } from './dto/update-item-unit.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { multerConfig } from 'src/multer.config';
 import multer from 'multer';
 import { GetByTypeDto } from './dto/get-by-type.dto';
-import { stat } from 'fs';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { RequisitionType } from 'src/requisitions/enums/requisition-type';
 import { S3Service } from 'src/s3/s3.service';
 import { ItemUnitFilterDto } from './dto/item-unit-filter.dto';
 
@@ -195,7 +192,6 @@ export class ItemUnitsController {
   @Get('get-stats-by-users')
   async getStatsByUsers() {
     const stats = await this.itemUnitsService.getStatsByUsers();
-    console.log(stats);
     return {
       data: stats,
     };
@@ -203,7 +199,8 @@ export class ItemUnitsController {
 
   @Get('get-stats')
   async getStats() {
-    const stats = await this.itemUnitsService.getStats();
+    const stats = await this.itemUnitsService.getStatusStats();
+
     return {
       success: true,
       data: stats,
@@ -213,7 +210,6 @@ export class ItemUnitsController {
   @Get(':id/usage-logs')
   async getUsageLogs(@Param('id', ParseIntPipe) id: number) {
     const logs = await this.itemUnitsService.getUsageLogs(id);
-    console.log(logs);
     return logs;
   }
 
@@ -221,8 +217,17 @@ export class ItemUnitsController {
   @UseGuards(JwtAuthGuard)
   async findByUserId(@Param('userId', ParseIntPipe) userId: number) {
     const items = await this.itemUnitsService.findByUser(userId);
-    console.log(items);
     return items;
+  }
+
+  @Get(':userId/status-stats-by-user')
+  @UseGuards(JwtAuthGuard)
+  async getStatusStatsByUser(@Param('userId', ParseIntPipe) userId: number) {
+    const stats = await this.itemUnitsService.getStatusStatsByUser(userId);
+    console.log('Stats by user:', stats);
+    return {
+      data: stats,
+    };
   }
 
   @Get(':id')

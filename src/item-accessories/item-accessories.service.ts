@@ -6,7 +6,6 @@ export class ItemAccessoriesService {
   constructor(@Inject('KNEX') private readonly db: any) {}
 
   async findByItem(itemId: any, trx: any = null) {
-    console.log(itemId);
     
     const db = this.db || trx;
 

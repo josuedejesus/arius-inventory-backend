@@ -1,8 +1,6 @@
 import {
-  BadGatewayException,
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -16,94 +14,16 @@ import { StockMovesService } from 'src/stock_moves/stock_moves.service';
 import { ItemUnitsService } from 'src/item-units/item-units.service';
 import { EventsService } from 'src/events/events.service';
 import { ItemUnitUsageLogsService } from 'src/item_unit_usage_logs/item_unit_usage_logs.service';
-import { createItemUnitUsageLogDto } from 'src/item_unit_usage_logs/dto/create-item-unit-usage-log.dto';
 import { CreateReturnRequisitionDto } from './dto/create-return-requisition.dto';
 import { RequisitionHandlerFactory } from './handlers/handler.factory';
-import { RequisitionType } from './enums/requisition-type';
 import { ItemUnitStatus } from 'src/item-units/enums/item-unit-status.enum';
 import { RequisitionStatus } from './enums/requisition-status.enum';
 import { RequisitionViewModel } from './dto/requisition-view-model';
 import { UpdateRequisitionDto } from './dto/update-requisition.dto';
 import { RequisitionLineViewModel } from 'src/requisition-lines/dto/requisition-line-view.model';
-import { not } from 'rxjs/internal/util/not';
-import { CreateRequisitionLineDto } from 'src/requisition-lines/dto/create-requisition-line.dto';
-import { PagedRequestDto } from './dto/PaginationDto';
-import { RequisitionFilterDto } from './dto/RequisitionFilterDto';
-
-const LOCATIONS = {
-  TRANSIT: 3,
-  MAIN: 2,
-  RECEPCION: 1,
-  CONSUMED: 4,
-  RENTED: 5,
-  SOLD: 6,
-};
-
-type ActionType = 'CREATE' | 'EXECUTE' | 'RECEIVE' | 'APPROVE';
-
-type ItemStatus = 'AVAILABLE' | 'IN_TRANSIT' | 'SOLD' | 'RENTED' | 'RESERVED';
-
-const SOURCE_MAP: Record<
-  RequisitionType,
-  Partial<Record<ActionType, number>>
-> = {
-  INTERNAL_TRANSFER: {
-    EXECUTE: LOCATIONS.TRANSIT,
-  },
-  ADJUSTMENT: {
-    EXECUTE: LOCATIONS.MAIN,
-  },
-  PURCHASE_RECEIPT: {
-    EXECUTE: LOCATIONS.MAIN,
-  },
-  RENT: {
-    CREATE: LOCATIONS.MAIN,
-    EXECUTE: LOCATIONS.TRANSIT,
-  },
-  RETURN: {
-    CREATE: LOCATIONS.MAIN,
-    EXECUTE: LOCATIONS.TRANSIT,
-  },
-  TRANSFER: {},
-  SALE: {},
-  CONSUMPTION: {},
-};
-
-const ITEM_STATUS_MAP: Record<
-  RequisitionType,
-  Partial<Record<ActionType, ItemStatus>>
-> = {
-  ADJUSTMENT: {
-    APPROVE: 'RESERVED',
-    EXECUTE: 'AVAILABLE',
-  },
-  PURCHASE_RECEIPT: {
-    APPROVE: 'RESERVED',
-    EXECUTE: 'AVAILABLE',
-  },
-  INTERNAL_TRANSFER: {
-    APPROVE: 'RESERVED',
-    EXECUTE: 'IN_TRANSIT',
-    RECEIVE: 'AVAILABLE',
-  },
-  RENT: {
-    APPROVE: 'RESERVED',
-    EXECUTE: 'IN_TRANSIT',
-    RECEIVE: 'RENTED',
-  },
-  RETURN: {
-    APPROVE: 'RESERVED',
-    EXECUTE: 'IN_TRANSIT',
-    RECEIVE: 'AVAILABLE',
-  },
-  TRANSFER: {
-    APPROVE: 'RESERVED',
-    EXECUTE: 'IN_TRANSIT',
-    RECEIVE: 'RENTED',
-  },
-  SALE: {},
-  CONSUMPTION: {},
-};
+import { getStatusAfterReceive } from './requisition-status.helper';
+import { RequisitionType } from './enums/requisition-type';
+import { MovementType } from './enums/movement-type';
 
 @Injectable()
 export class RequisitionsService {
@@ -122,29 +42,78 @@ export class RequisitionsService {
 
   async create(dto: CreateRequisitionDto) {
     return this.db.transaction(async (trx: any) => {
+      console.log('Creando requisición con DTO:', dto);
       const [requisition] = await trx('requisitions')
         .insert({
           requested_by: dto.requested_by,
           destination_location_id: dto.destination_location_id,
           status: dto.status,
           notes: dto.notes,
+          movement: dto.movement,
           type: dto.type,
           schedulled_at: dto.schedulled_at,
         })
         .returning('*');
 
-      // líneas simples sin calcular source
-      const lines = dto.lines.map((l: any) => ({
-        requisition_id: requisition.id,
-        item_id: l.item_id,
-        item_unit_id: l.item_unit_id || null,
-        quantity: l.quantity,
-        destination_location_id: dto.destination_location_id,
-        return_of_line_id: l.return_of_line_id || null,
-        _accessories: l.accessories || [],
-      }));
+      const lines = await Promise.all(
+        dto.lines.map(async (l: any) => {
+          let source_location_id = null;
+          if (l.item_unit_id) {
+            const itemUnit = await trx('item_units')
+              .where({ id: l.item_unit_id })
+              .first();
+
+            if (!itemUnit) {
+              throw new Error('Item unit no encontrado');
+            }
+
+            if (
+              dto.type !== RequisitionType.PURCHASE_RECEIPT &&
+              dto.type !== RequisitionType.ADJUSTMENT
+            ) {
+              if (!itemUnit.location_id) {
+                throw new Error('El equipo no tiene ubicación asignada');
+              }
+            }
+
+            source_location_id = itemUnit.location_id;
+          } else {
+            if (
+              dto.type !== RequisitionType.PURCHASE_RECEIPT &&
+              dto.type !== RequisitionType.ADJUSTMENT
+            ) {
+              if (!l.source_location_id) {
+                throw new Error(
+                  'Debe especificar ubicación origen para supplies',
+                );
+              }
+            } else {
+              if (dto.movement === MovementType.OUT) {
+                if (!l.source_location_id) {
+                  throw new Error(
+                    'Debe especificar ubicación origen para supplies',
+                  );
+                }
+                source_location_id = l.source_location_id;
+              }
+            }
+          }
+
+          return {
+            requisition_id: requisition.id,
+            item_id: l.item_id,
+            item_unit_id: l.item_unit_id || null,
+            quantity: l.quantity,
+            source_location_id,
+            destination_location_id: dto.destination_location_id,
+            return_of_line_id: l.return_of_line_id || null,
+            _accessories: l.accessories || [],
+          };
+        }),
+      );
 
       const linesData = lines.map(({ _accessories, ...line }) => line);
+
       const createdLines = await this.requisitionLinesService.createMany(
         linesData,
         trx,
@@ -167,6 +136,7 @@ export class RequisitionsService {
       this.eventsService.emit('requisition.created', {
         requisitionId: requisition.id,
       });
+
       return requisition;
     });
   }
@@ -182,57 +152,8 @@ export class RequisitionsService {
         requisition.id,
       );
 
-      // resolvé y actualizá source por línea
-      await Promise.all(
-        lines.map(async (l: any) => {
-          if (l.item_unit_id) {
-            // unidad serializada — validá que esté en la ubicación correcta
-            const unit = await trx('item_units')
-              .where({ id: l.item_unit_id })
-              .select('location_id')
-              .first();
-            if (!unit)
-              throw new ConflictException(
-                `Unidad ${l.item_unit_id} no encontrada`,
-              );
+      await this.validateRequisitionLines(lines, requisition.type, trx);
 
-            await trx('requisition_lines').where({ id: l.id }).update({
-              source_location_id: unit.location_id,
-            });
-          } else {
-            // insumo — calculá source con split
-            const splits = await this.resolveSourceLocation(
-              l.item_id,
-              l.quantity,
-              trx,
-              requisition.destination_location_id,
-            );
-
-            // si hay split, la línea original se reemplaza por múltiples
-            if (splits.length === 1) {
-              await trx('requisition_lines').where({ id: l.id }).update({
-                source_location_id: splits[0].source_location_id,
-              });
-            } else {
-              // eliminá la línea original y creá las sub-líneas
-              await trx('requisition_lines').where({ id: l.id }).delete();
-              await this.requisitionLinesService.createMany(
-                splits.map((s) => ({
-                  requisition_id: requisitionId,
-                  item_id: l.item_id,
-                  item_unit_id: null,
-                  quantity: s.quantity,
-                  source_location_id: s.source_location_id,
-                  destination_location_id: requisition.destination_location_id,
-                })),
-                trx,
-              );
-            }
-          }
-        }),
-      );
-
-      // reservá unidades serializadas
       const itemsUnits =
         await this.requisitionLinesService.findItemsByRequisitionId(
           requisition.id,
@@ -260,67 +181,6 @@ export class RequisitionsService {
       this.eventsService.emit('requisition.approved', { requisitionId });
       return { requisition_id: requisitionId };
     });
-  }
-
-  private async resolveSourceLocation(
-    itemId: number,
-    quantity: number,
-    trx: any,
-    destinationId?: number,
-  ) {
-    console.log('destinationId', destinationId);
-    // si el destino es WAREHOUSE (compra, ajuste) no necesita source
-    if (destinationId) {
-      const destination = await trx('locations')
-        .where({ id: destinationId })
-        .select('type')
-        .first();
-
-      if (destination?.type === 'WAREHOUSE') {
-        return [{ source_location_id: null, quantity: Number(quantity) }];
-      }
-    }
-    const warehouses = await trx('locations')
-      .where('locations.type', 'WAREHOUSE')
-      .select(
-        'locations.id as location_id',
-        trx.raw(
-          `
-        COALESCE((
-          SELECT SUM(quantity) FROM stock_moves
-          WHERE item_id = ? AND destination_location_id = locations.id
-        ), 0)
-        -
-        COALESCE((
-          SELECT SUM(quantity) FROM stock_moves
-          WHERE item_id = ? AND source_location_id = locations.id
-        ), 0) AS available
-      `,
-          [itemId, itemId],
-        ),
-      )
-      .orderBy('available', 'desc');
-
-    // filtrás en JS — más simple y sin el problema de bindings
-    const withStock = warehouses.filter((w: any) => Number(w.available) > 0);
-
-    let remaining = Number(quantity);
-    const sources: { source_location_id: number; quantity: number }[] = [];
-
-    for (const wh of withStock) {
-      if (remaining <= 0) break;
-      const take = Math.min(remaining, Number(wh.available));
-      sources.push({ source_location_id: wh.location_id, quantity: take });
-      remaining -= take;
-    }
-
-    if (remaining > 0) {
-      throw new ConflictException(
-        `Stock insuficiente para el item ${itemId}. Faltan ${remaining} unidades.`,
-      );
-    }
-
-    return sources;
   }
 
   async update(requisitionId: number, dto: UpdateRequisitionDto) {
@@ -366,10 +226,6 @@ export class RequisitionsService {
             (line: any) => line.id && Number(line.id) === Number(l.id),
           ),
       );
-
-      console.log('lines to create', linesToCreate);
-      console.log('lines to update', linesToUpdate);
-      console.log('lines to delete', linesToDelete);
 
       await Promise.all([
         ...linesToCreate.map((line: any) =>
@@ -424,11 +280,7 @@ export class RequisitionsService {
 
   async execute(requisitionId: number, personId: string) {
     return this.db.transaction(async (trx: any) => {
-      const requisition = await this.db('requisitions')
-        .where({
-          id: requisitionId,
-        })
-        .first();
+      const requisition = await this.findById(requisitionId, trx);
 
       if (!requisition) {
         throw new NotFoundException('La requisicion no existe');
@@ -444,22 +296,27 @@ export class RequisitionsService {
         requisition.id,
       );
 
+      await this.validateRequisitionLines(lines, requisition.type, trx);
+
       const invalidLines = lines.filter(
         (l: any) => Number(l.photos_count) === 0,
       );
 
-      if (invalidLines.length > 0) {
+      /*if (invalidLines.length > 0) {
         throw new BadRequestException(
           'No se puede ejecutar la requisición: todos los artículos deben contar con evidencia fotográfica',
         );
-      }
+      }*/
 
-      //Update requisition
       await trx('requisitions')
         .where({
           id: requisitionId,
         })
         .update(updateData);
+
+      console.log('movimientos a crear:', requisition.movement);
+
+      console.log('Líneas de la requisición:', lines);
 
       const movements = lines.map((l) => ({
         requisition_id: requisition.id,
@@ -518,7 +375,6 @@ export class RequisitionsService {
       const itemUnitIds = itemsUnits.map((u: any) => u.id);
       const receiptDate = new Date();
 
-      // ── Location map ──────────────────────────────────────────────────────
       const allLocationIds = [
         ...new Set([
           ...lines.map((l: any) => l.destination_location_id),
@@ -535,21 +391,31 @@ export class RequisitionsService {
         locations.map((l: any) => [l.id, l.type]),
       );
 
-      // ── Update item units (status + location por línea) ───────────────────
       await Promise.all(
         lines
           .filter((l: any) => l.item_unit_id)
           .map((line: any) => {
-            const destType = locationMap[line.destination_location_id];
+            /*const destType = locationMap[line.destination_location_id];
             const status =
               destType === 'WAREHOUSE'
                 ? ItemUnitStatus.AVAILABLE
-                : ItemUnitStatus.RENTED;
+                : ItemUnitStatus.RENTED;*/
+
+            const { status, location_id } = getStatusAfterReceive(
+              requisition.type,
+              line.destination_location_id,
+              locationMap[line.destination_location_id],
+            );
+
+            console.log('Estado de articulo', status, location_id);
+
+            //throw new ConflictException('Debugging');
+
             return this.itemUnitsService.updateMany(
               [line.item_unit_id],
               {
                 status,
-                location_id: line.destination_location_id,
+                location_id,
                 updated_at: receiptDate,
               },
               trx,
@@ -557,7 +423,6 @@ export class RequisitionsService {
           }),
       );
 
-      // ── Stock moves ───────────────────────────────────────────────────────
       const movements = lines.map((l: any) => ({
         requisition_id: requisition.id,
         item_id: l.item_id,
@@ -568,9 +433,9 @@ export class RequisitionsService {
         received_by: personId,
         received_at: receiptDate,
       }));
+
       await this.stockMovesService.createMany(movements, trx);
 
-      // ── Usage logs ────────────────────────────────────────────────────────
       const linesFromProject = lines.filter(
         (l: any) => locationMap[l.source_location_id] === 'PROJECT',
       );
@@ -611,7 +476,6 @@ export class RequisitionsService {
       return true;
     });
   }
-
   async closeUsageLogsFromParentLines(lines, itemUnitIds, receiptDate, trx) {
     const parentLinesIds = [
       ...new Set(
@@ -634,13 +498,9 @@ export class RequisitionsService {
       .select('item_units.id as item_unit_id', 'items.usage_hours')
       .whereIn('item_units.id', itemUnitIds);
 
-    console.log('units', units);
-
     const usageMap = new Map(
       units.map((u) => [Number(u.item_unit_id), Number(u.usage_hours || 0)]),
     );
-
-    console.log('usageMap', usageMap);
 
     const logs = await trx('item_unit_usage_logs')
       .whereIn('requisition_id', parentRequisitionsIds)
@@ -655,10 +515,7 @@ export class RequisitionsService {
           (receiptDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
         ) + 1;
 
-      console.log('log', log);
       const usagePerDay = usageMap.get(log.item_unit_id) || 0;
-
-      console.log('uso por dia', usagePerDay);
 
       return {
         id: log.id,
@@ -672,43 +529,82 @@ export class RequisitionsService {
     }
   }
 
+  async validateRequisitionLines(
+    lines: any[],
+    type: RequisitionType,
+    trx: any,
+  ) {
+    await Promise.all(
+      lines.map(async (l: any) => {
+        // 🔷 ITEM UNIT
+        if (l.item_unit_id) {
+          const unit = await trx('item_units')
+            .where({ id: l.item_unit_id })
+            .select('location_id')
+            .first();
+
+          if (!unit) {
+            throw new ConflictException(
+              `Unidad ${l.item_unit_id} no encontrada`,
+            );
+          }
+
+          if (unit.location_id !== l.source_location_id) {
+            throw new ConflictException(
+              `La unidad ${l.item_unit_id} ya no está en la ubicación original`,
+            );
+          }
+        }
+
+        // 🔷 SUPPLY
+        else {
+          if (
+            type !== RequisitionType.ADJUSTMENT &&
+            type !== RequisitionType.PURCHASE_RECEIPT
+          ) {
+            const stock = await this.itemUnitsService.calculateStock(
+              l.item_id,
+              l.source_location_id,
+              l.unit_name,
+              trx,
+            );
+
+            if (Number(stock.available) < Number(l.quantity)) {
+              throw new ConflictException(
+                `Stock insuficiente para item ${l.item_id} en ubicación ${l.source_location_id}`,
+              );
+            }
+          }
+        }
+      }),
+    );
+  }
+
   async findAll(
     filters?: { personId?: string },
     pagination?: { skipCount?: number; maxResultCount?: number },
   ) {
     const { skipCount = 0, maxResultCount = 10 } = pagination || {};
 
-    /* 🧠 BASE QUERY (SIN SELECT NI GROUP) */
     const baseQuery = this.db('requisitions as r')
       .join('persons as p', 'p.id', 'r.requested_by')
-
       .leftJoin(
-        { source_location: 'locations' },
-        'source_location.id',
-        'r.source_location_id',
-      )
-
-      .join(
         { destination_location: 'locations' },
         'destination_location.id',
         'r.destination_location_id',
       )
-
       .leftJoin('requisition_lines as rl', function () {
         this.on('rl.requisition_id', '=', 'r.id').andOnNotNull(
           'rl.item_unit_id',
         );
       })
-
       .leftJoin('requisition_lines as rlr', 'rlr.return_of_line_id', 'rl.id')
       .leftJoin('requisitions as rr', 'rr.id', 'rlr.requisition_id');
 
-    /* 🔎 FILTROS (UNA SOLA VEZ) */
     if (filters?.personId) {
       baseQuery.where('r.requested_by', filters.personId);
     }
 
-    /* 🔢 COUNT CORRECTO */
     const totalResult = await baseQuery
       .clone()
       .clearSelect()
@@ -718,37 +614,30 @@ export class RequisitionsService {
 
     const total = Number(totalResult?.total || 0);
 
-    /* 📊 QUERY PRINCIPAL */
     const query = baseQuery
       .clone()
-      .groupBy(
-        'r.id',
-        'p.name',
-        'source_location.name',
-        'destination_location.name',
-      )
+      .groupBy('r.id', 'p.name', 'destination_location.name')
       .select(
         'r.*',
         'p.name as requestor_name',
-        'source_location.name as source_location_name',
-        'destination_location.name as destination_location_name',
+        this.db.raw(`destination_location.name as destination_location_name`),
 
         this.db.raw('COUNT(DISTINCT rl.id) as total_units'),
 
         this.db.raw(`
-        COUNT(DISTINCT CASE 
-          WHEN rr.status = 'DONE' THEN rlr.id 
-        END) as returned_units
-      `),
+          COUNT(DISTINCT CASE 
+            WHEN rr.status = 'DONE' THEN rlr.id 
+          END) as returned_units
+        `),
 
         this.db.raw(`
-        CASE
-          WHEN r.type NOT IN ('RENT','TRANSFER') THEN NULL
-          WHEN COUNT(DISTINCT CASE WHEN rr.status = 'DONE' THEN rlr.id END) = 0 THEN 'NONE'
-          WHEN COUNT(DISTINCT CASE WHEN rr.status = 'DONE' THEN rlr.id END) = COUNT(DISTINCT rl.id) THEN 'FULL'
-          ELSE 'PARTIAL'
-        END as return_status
-      `),
+          CASE
+            WHEN r.type NOT IN ('RENT','TRANSFER') THEN NULL
+            WHEN COUNT(DISTINCT CASE WHEN rr.status = 'DONE' THEN rlr.id END) = 0 THEN 'NONE'
+            WHEN COUNT(DISTINCT CASE WHEN rr.status = 'DONE' THEN rlr.id END) = COUNT(DISTINCT rl.id) THEN 'FULL'
+            ELSE 'PARTIAL'
+          END as return_status
+        `),
       )
       .orderBy('r.id', 'desc')
       .limit(maxResultCount)
@@ -756,13 +645,11 @@ export class RequisitionsService {
 
     const items = await query;
 
-    /* 🎯 RESPONSE ESTÁNDAR */
     return {
       items,
       total,
     };
   }
-
   async findById(
     requisitionId: number,
     trx: any = null,
@@ -775,7 +662,7 @@ export class RequisitionsService {
       .leftJoin('persons as requestor', 'requestor.id', 'r.requested_by')
       .leftJoin('persons as approver', 'approver.id', 'r.approved_by')
 
-      .join(
+      .leftJoin(
         'locations as destination',
         'destination.id',
         'r.destination_location_id',

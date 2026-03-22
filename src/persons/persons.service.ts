@@ -40,8 +40,6 @@ export class PersonsService {
 
         if (dto.user) {
           const passwordHash = await bcrypt.hash(dto.user.password, 10);
-          console.log('person', person);
-          console.log('Creating user:', dto.user);
 
           const user = manager.create(User, {
             username: dto.user.username,
@@ -56,7 +54,6 @@ export class PersonsService {
         return { id: person.id };
       });
     } catch (error: any) {
-      console.log(error);
       if (error.code === '23505') {
         throw new ConflictException(
           'Ya existe un usuario con ese correo o teléfono.',
@@ -78,6 +75,38 @@ export class PersonsService {
         rtn: dto.rtn,
         updated_at: new Date(),
       });
+
+      const user = await this.userRepository.findOne({
+        where: { person: { id } },
+        relations: ['person'],
+      });
+
+      if (user) {
+        const updateData: any = {
+          username: dto.user?.username || user.username,
+          is_active: dto.user?.is_active ?? user.is_active,
+          role: dto.user?.role || user.role,
+        };
+        if (dto.user?.password?.length) {
+          updateData.password_hash = await bcrypt.hash(dto.user.password, 10);
+        }
+        await this.userRepository.save({
+          ...user,
+          ...updateData,
+        });
+      } else {
+        if (dto.user) {
+          const passwordHash = await bcrypt.hash(dto.user.password, 10);
+          const newUser = this.userRepository.create({
+            username: dto.user.username,
+            password_hash: passwordHash,
+            role: dto.user.role,
+            is_active: true,
+            person: person,
+          });
+          await this.userRepository.save(newUser);
+        }
+      }
     } catch (error: any) {
       if (error?.code === '23505' || error?.driverError?.code === '23505') {
         throw new ConflictException('Datos duplicados.');
@@ -89,36 +118,35 @@ export class PersonsService {
 
   async findAll(query: any) {
     const qb = this.personRepository
-  .createQueryBuilder('person')
-  .leftJoin('person.user', 'user');
+      .createQueryBuilder('person')
+      .leftJoin('person.user', 'user');
 
-if (query.locationId) {
-  qb.innerJoin(
-    'location_members',
-    'lm',
-    'lm.user_id = user.id',
-  ).andWhere('lm.location_id = :locationId', {
-    locationId: Number(query.locationId),
-  });
-}
+    if (query.locationId) {
+      qb.innerJoin('location_members', 'lm', 'lm.user_id = user.id').andWhere(
+        'lm.location_id = :locationId',
+        {
+          locationId: Number(query.locationId),
+        },
+      );
+    }
 
-return qb
-  .select([
-    'person.id AS id',
-    'person.name AS name',
-    'person.phone AS phone',
-    'person.email AS email',
-    'person.role AS role',
-    'person.address AS address',
-    'person.rtn AS rtn',
-    'person.created_at AS created_at',
-    'person.updated_at AS updated_at',
-    'user.id AS user_id',
-    'user.username AS username',
-    'user.role AS user_role',
-  ])
-  .orderBy('person.name', 'ASC')
-  .getRawMany();
+    return qb
+      .select([
+        'person.id AS id',
+        'person.name AS name',
+        'person.phone AS phone',
+        'person.email AS email',
+        'person.role AS role',
+        'person.address AS address',
+        'person.rtn AS rtn',
+        'person.created_at AS created_at',
+        'person.updated_at AS updated_at',
+        'user.id AS user_id',
+        'user.username AS username',
+        'user.role AS user_role',
+      ])
+      .orderBy('person.name', 'ASC')
+      .getRawMany();
   }
 
   async findById(id: any, trx: any = null) {
@@ -143,6 +171,4 @@ return qb
 
     return locations;
   }
-
-  
 }

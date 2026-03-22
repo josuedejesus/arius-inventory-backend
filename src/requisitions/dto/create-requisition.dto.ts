@@ -1,41 +1,50 @@
-import { IsArray, IsDate, IsEnum, IsNotEmpty, IsOptional, IsString } from "class-validator";
-import { RequisitionType } from "../enums/requisition-type";
+import {
+  IsArray,
+  IsDate,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+import { RequisitionType } from '../enums/requisition-type';
+import { MovementType } from '../enums/movement-type';
 
 export class CreateRequisitionDto {
-    @IsString()
-    @IsNotEmpty()
-    requested_by: string
+  @IsString()
+  @IsNotEmpty()
+  requested_by: string;
 
-    @IsString()
-    @IsOptional()
-    source_location_id: string
+  @IsNumber()
+  @IsOptional()
+  destination_location_id: number;
 
-    @IsString()
-    @IsOptional()
-    destination_location_id: string
+  @IsEnum(MovementType)
+  @IsNotEmpty()
+  movement: MovementType;
 
-    @IsEnum(RequisitionType)
-    @IsNotEmpty()
-    type: RequisitionType
+  @IsEnum(RequisitionType)
+  @IsNotEmpty()
+  type: RequisitionType;
 
-    @IsString()
-    @IsNotEmpty()
-    status: string
+  @IsString()
+  @IsNotEmpty()
+  status: string;
 
-    @IsString()
-    @IsOptional()
-    notes: string
+  @IsString()
+  @IsOptional()
+  notes: string;
 
-    @IsString()
-    @IsNotEmpty()
-    schedulled_at: string
+  @IsString()
+  @IsNotEmpty()
+  schedulled_at: string;
 
-    @IsArray()
-    @IsNotEmpty()
-    lines: {
-        item_id: string,
-        item_unit_id: string,
-        quantity: string,
-        accessories: any[],
-    }[]
+  @IsArray()
+  @IsNotEmpty()
+  lines: {
+    item_id: number;
+    item_unit_id: string;
+    quantity: number;
+    accessories: any[];
+  }[];
 }

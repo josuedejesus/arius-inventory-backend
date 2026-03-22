@@ -45,7 +45,7 @@ export class RequisitionLinesService {
       )
 
       // DESTINATION LOCATION (siempre existe)
-      .join(
+      .leftJoin(
         { destination_location: 'locations' },
         'destination_location.id',
         'requisition_lines.destination_location_id',

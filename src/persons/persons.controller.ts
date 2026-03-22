@@ -60,6 +60,8 @@ export class PersonsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdatePersonDto,
   ) {
+
+    console.log(dto);
     const person = await this.personsService.update(id, dto);
 
     return {

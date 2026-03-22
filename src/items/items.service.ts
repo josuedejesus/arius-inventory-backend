@@ -13,6 +13,7 @@ import { ItemUnitsService } from 'src/item-units/item-units.service';
 import { ItemType } from './enums/item-type.enum';
 import { ItemViewModel } from './dto/item-view-model';
 import { PagedRequestDto } from 'src/requisitions/dto/PaginationDto';
+import { RequisitionType } from 'src/requisitions/enums/requisition-type';
 
 @Injectable()
 export class ItemsService {
@@ -200,22 +201,125 @@ export class ItemsService {
     });
   }
 
-  async getItem(id: string, trx: any = null) {
-    const db = this.db || trx;
-
+  async findById(id: string, trx: any = null) {
+    const db = trx || this.db;
     return db('items')
-      .where({
-        id: id,
-      })
-      .first();
-  }
-
-  async findById(id: string) {
-    return this.db('items')
       .join('units', 'units.id', 'items.unit_id')
       .select('items.*', 'units.name as unit_name', 'units.code as unit_code')
       .where('items.id', id)
       .first();
+  }
+
+  async findAllWithProperties(filters?: {
+    locationId?: number;
+    requisitionType?: RequisitionType;
+  }) {
+    const result = await this.db.raw(`
+    WITH stock_by_location AS (
+      SELECT
+        sm.item_id,
+        l.id   AS location_id,
+        l.name AS location_name,
+        COALESCE(SUM(CASE WHEN sm.destination_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+        -
+        COALESCE(SUM(CASE WHEN sm.source_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+        AS available_quantity
+      FROM stock_moves sm
+      JOIN locations l
+        ON l.id = sm.destination_location_id
+        OR l.id = sm.source_location_id
+      GROUP BY sm.item_id, l.id, l.name
+    )
+
+    SELECT
+      i.id        AS item_id,
+      NULL::int   AS item_unit_id,
+      i.name,
+      i.brand,
+      i.model,
+      i.type,
+      i.tracking,
+      i.image_path,
+      u.code      AS unit_code,
+      u.name      AS unit_name,
+      sbl.location_id,
+      sbl.location_name,
+      sbl.available_quantity,
+      NULL::text  AS status,
+      NULL::text  AS internal_code
+    FROM items i
+    JOIN units u               ON u.id       = i.unit_id
+    JOIN stock_by_location sbl ON sbl.item_id = i.id
+    WHERE i.type = 'SUPPLY'
+
+    UNION ALL
+
+    SELECT
+      i.id          AS item_id,
+      iu.id         AS item_unit_id,
+      i.name,
+      i.brand,
+      i.model,
+      i.type,
+      i.tracking,
+      iu.image_path,
+      u.code        AS unit_code,
+      u.name        AS unit_name,
+      l.id          AS location_id,
+      l.name        AS location_name,
+      1             AS available_quantity,
+      iu.status::text,
+      iu.condition::text,
+      iu.internal_code
+    FROM item_units iu
+    JOIN items i          ON i.id  = iu.item_id
+    JOIN units u          ON u.id  = i.unit_id
+    LEFT JOIN locations l ON l.id  = iu.location_id
+
+    ORDER BY name ASC
+  `);
+
+    return result.rows;
+  }
+
+  async getAvailableSupplies() {
+    const supplies = await this.db.raw(`
+      WITH stock_by_location AS (
+        SELECT
+          sm.item_id,
+          l.id   AS location_id,
+          l.name AS location_name,
+          COALESCE(SUM(CASE WHEN sm.destination_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+          -
+          COALESCE(SUM(CASE WHEN sm.source_location_id      = l.id THEN sm.quantity ELSE 0 END), 0)
+          AS available_quantity
+        FROM stock_moves sm
+        JOIN locations l
+          ON l.id = sm.destination_location_id
+          OR l.id = sm.source_location_id
+        WHERE l.type = 'WAREHOUSE'
+        GROUP BY sm.item_id, l.id, l.name
+        HAVING
+          COALESCE(SUM(CASE WHEN sm.destination_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+          -
+          COALESCE(SUM(CASE WHEN sm.source_location_id      = l.id THEN sm.quantity ELSE 0 END), 0)
+          > 0
+      )
+      SELECT
+        i.*,
+        u.code AS unit_code,
+        u.name AS unit_name,
+        sbl.location_id,
+        sbl.location_name,
+        sbl.available_quantity
+      FROM items i
+      JOIN units u             ON u.id  = i.unit_id
+      JOIN stock_by_location sbl ON sbl.item_id = i.id
+      WHERE i.type = 'SUPPLY'
+      ORDER BY i.name, sbl.location_name
+    `);
+
+    return supplies.rows;
   }
 
   async getStats() {
@@ -235,17 +339,6 @@ export class ItemsService {
         this.db.raw('COUNT(*) as count'),
       );
     return data;
-  }
-
-  async findAllSupplies() {
-    const supplies = await this.db('items')
-      .join('units', 'units.id', 'items.unit_id')
-      .where({
-        type: ItemType.SUPPLY,
-      })
-      .select('items.*', 'units.code as unit_code', 'units.name as unit_name');
-
-    return supplies;
   }
 
   async findAllAvailableSupplies() {
@@ -348,8 +441,6 @@ export class ItemsService {
       `),
       )
       .first();
-
-    console.log('item stats', result);
 
     return result;
   }

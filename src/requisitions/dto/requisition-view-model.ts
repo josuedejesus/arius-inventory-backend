@@ -1,6 +1,7 @@
 import { IsArray, IsDate, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from "class-validator";
 import { RequisitionType } from "../enums/requisition-type";
 import { RequisitionStatus } from "../enums/requisition-status.enum";
+import { MovementType } from "../enums/movement-type";
 
 export class RequisitionViewModel {
     @IsNumber()
@@ -23,6 +24,9 @@ export class RequisitionViewModel {
 
     @IsDate()
     updated_at: Date
+
+    @IsEnum(MovementType)
+    movement: MovementType
 
     @IsEnum(RequisitionType)
     type: RequisitionType
