@@ -49,11 +49,12 @@ import { S3Module } from './s3/s3.module';
       username: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
+      schema: 'public',
       autoLoadEntities: true,
       synchronize: false,
     }),
     PdfModule,
-    S3Module
+    S3Module,
   ],
   controllers: [AppController],
   providers: [AppService, PdfService],

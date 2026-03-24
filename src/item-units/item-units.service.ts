@@ -464,14 +464,14 @@ export class ItemUnitsService {
         this.db.raw(`
         CASE
           WHEN last_log.last_entry_at IS NOT NULL
-          THEN EXTRACT(DAY FROM NOW() - last_log.last_entry_at)::int
+          THEN CURRENT_DATE - DATE(last_log.last_entry_at)
           ELSE NULL
         END as days_in_project
       `),
         this.db.raw(`
         CASE
           WHEN last_log.last_entry_at IS NOT NULL
-          THEN i.usage_hours * (EXTRACT(DAY FROM NOW() - last_log.last_entry_at)::int + 1)
+          THEN i.usage_hours * (CURRENT_DATE - DATE(last_log.last_entry_at) + 1)
           ELSE NULL
         END as estimated_usage_hours
       `),

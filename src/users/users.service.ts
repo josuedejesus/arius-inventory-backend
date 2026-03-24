@@ -116,7 +116,9 @@ export class UsersService {
   }
 
   async findByUsername(username: string) {
-    return this.db('users').where({ username }).first();
+    return this.userRepository.findOne({
+      where: { username },
+    });
   }
 
   async findById(id: string, trx: any = null) {
