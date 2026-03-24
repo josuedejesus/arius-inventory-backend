@@ -2,11 +2,11 @@ import { IsArray, IsBoolean, isNotEmpty, IsNotEmpty, IsOptional, IsString } from
 
 export class UpdateLocationDto {
     @IsString()
-    @IsNotEmpty()
+    @IsNotEmpty( { message: 'El nombre es obligatorio' })
     name: string
 
     @IsString()
-    @IsNotEmpty()
+    @IsNotEmpty( { message: 'El tipo es obligatorio' })
     type: string
 
     @IsString()
@@ -14,9 +14,10 @@ export class UpdateLocationDto {
     location: string
 
     @IsBoolean()
-    @IsNotEmpty()
+    @IsNotEmpty({ message: 'El estado es obligatorio' })
     is_active: boolean
 
     @IsArray()
+    @IsOptional()
     location_members: any[]
 }

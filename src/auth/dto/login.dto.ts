@@ -2,10 +2,10 @@ import { IsNotEmpty, IsString } from "class-validator";
 
 export class LoginDto {
     @IsString()
-    @IsNotEmpty()
-    username: string
+    @IsNotEmpty({ message: 'El nombre de usuario es obligatorio' })
+    username: string;
 
     @IsString()
-    @IsNotEmpty()
-    password: string
+    @IsNotEmpty({ message: 'La contraseña es obligatoria' })
+    password: string;
 }

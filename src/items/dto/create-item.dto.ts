@@ -11,11 +11,9 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { ItemAccessoryDto } from './item-accessory.dto';
 import { ItemType } from '../enums/item-type.enum';
-import { CreateItemUnitDto } from 'src/item-units/dto/create-item-unit.dto';
 import { Transform, Type } from 'class-transformer';
-import { CreateItemAccessoryDto } from 'src/item-accessories/dto/create-item-accessory.dto';
+import { IsRequiredForType } from '../validators/item.validator';
 
 export class CreateItemDto {
   //Item
@@ -32,28 +30,32 @@ export class CreateItemDto {
   model: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El tipo es obligatorio' })
   type: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El seguimiento es obligatorio' })
   tracking: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'La unidad es obligatoria' })
   unit_id: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El estado activo es obligatorio' })
   is_active: string;
 
-  @IsString()
+  @IsRequiredForType(ItemType.SUPPLY, {
+    message: 'El campo stock mínimo es obligatorio para el tipo insumo',
+  })
   @IsOptional()
-  minimum_stock?: string;
+  minimum_stock?: number;
 
-  @IsString()
+  @IsRequiredForType(ItemType.TOOL, {
+    message: 'El campo horas de uso es obligatorio para el tipo equipo',
+  })
   @IsOptional()
-  usage_hours?: string;
+  usage_hours?: number;
 
   //Accessories
   @Transform(({ value }) => {
@@ -63,7 +65,7 @@ export class CreateItemDto {
   @IsArray()
   item_units: any[];
 
- @Transform(({ value }) => {
+  @Transform(({ value }) => {
     if (typeof value === 'string') return JSON.parse(value);
     return value;
   })

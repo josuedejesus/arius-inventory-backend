@@ -9,23 +9,24 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PersonRole } from '../enums/person-role.enum';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { CreateUserDTO } from 'src/users/dto/create-user.dto';
 
 export class CreatePersonDto {
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El nombre es obligatorio' })
   name: string;
 
   @IsEnum(PersonRole)
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El rol es obligatorio' })
   role: PersonRole;
 
   @IsString()
-  @Length(8, 20)
+  @Length(8, 20, { message: 'El teléfono debe tener entre 8 y 20 caracteres' })
   phone: string;
 
-  @IsEmail()
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsEmail({}, { message: 'El correo electrónico no es válido' })
   @IsOptional()
   email?: string;
 

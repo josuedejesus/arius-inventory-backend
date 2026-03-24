@@ -14,7 +14,15 @@ import { ItemType } from './enums/item-type.enum';
 import { ItemViewModel } from './dto/item-view-model';
 import { PagedRequestDto } from 'src/requisitions/dto/PaginationDto';
 import { RequisitionType } from 'src/requisitions/enums/requisition-type';
-
+import { MovementType } from 'src/requisitions/enums/movement-type';
+import { UsersService } from 'src/users/users.service';
+import { PersonsService } from 'src/persons/persons.service';
+import { LocationsService } from 'src/locations/locations.service';
+import {
+  getCatalogFilter,
+  CatalogFilter,
+} from './helpers/catalog-filter.helper';
+import { ItemFilterDto } from './dto/item-filter-dto';
 @Injectable()
 export class ItemsService {
   constructor(
@@ -22,6 +30,11 @@ export class ItemsService {
     @Inject(forwardRef(() => ItemUnitsService))
     private readonly itemUnitsService: ItemUnitsService,
     private readonly itemAccessoriesService: ItemAccessoriesService,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
+    @Inject(forwardRef(() => PersonsService))
+    private readonly personService: PersonsService,
+    private readonly locationService: LocationsService,
   ) {}
 
   async getItems() {
@@ -277,6 +290,96 @@ export class ItemsService {
     LEFT JOIN locations l ON l.id  = iu.location_id
 
     ORDER BY name ASC
+  `);
+
+    return result.rows;
+  }
+
+  async getCatalog(
+    movement: MovementType,
+    type: RequisitionType,
+    userId: number,
+  ) {
+    const user = await this.usersService.findById(String(userId));
+    const person = await this.personService.findById(user.person_id);
+    const assigedLocations = await this.locationService.findByUser(userId);
+
+    const filter = getCatalogFilter(
+      movement,
+      type,
+      person.role,
+      assigedLocations.map((l) => l.id),
+    );
+
+    console.log('Catalog filter:', filter);
+
+    const [itemUnits, supplies] = await Promise.all([
+      filter.itemUnits !== false
+        ? this.itemUnitsService.getCatalog(filter.itemUnits as any)
+        : Promise.resolve([]),
+      filter.supplies !== false
+        ? this.getAvailableSupplies()
+        : Promise.resolve([]),
+    ]);
+
+    console.log('Catalog item units:', itemUnits);
+    console.log('Catalog supplies:', supplies);
+
+    return {
+      itemUnits,
+      supplies,
+    };
+  }
+
+  async findSupplyCatalog(filter: ItemFilterDto) {
+    const locationTypeFilter = filter.locationType
+      ? `AND l.type = '${filter.locationType}'`
+      : '';
+
+    const locationIdsFilter = filter.locationIds?.length
+      ? `AND l.id = ANY(ARRAY[${filter.locationIds.join(',')}])`
+      : '';
+
+    // Si es unlimited no filtra por stock > 0
+    const havingClause = filter.unlimited
+      ? ''
+      : `HAVING
+        COALESCE(SUM(CASE WHEN sm.destination_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+        -
+        COALESCE(SUM(CASE WHEN sm.source_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+        > 0`;
+
+    const result = await this.db.raw(`
+    WITH stock_by_location AS (
+      SELECT
+        sm.item_id,
+        l.id   AS location_id,
+        l.name AS location_name,
+        COALESCE(SUM(CASE WHEN sm.destination_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+        -
+        COALESCE(SUM(CASE WHEN sm.source_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+        AS available_quantity
+      FROM stock_moves sm
+      JOIN locations l
+        ON l.id = sm.destination_location_id
+        OR l.id = sm.source_location_id
+      ${locationTypeFilter}
+      ${locationIdsFilter}
+      GROUP BY sm.item_id, l.id, l.name
+      ${havingClause}
+    )
+    SELECT
+      i.*,
+      u.code AS unit_code,
+      u.name AS unit_name,
+      sbl.location_id,
+      sbl.location_name,
+      sbl.available_quantity
+    FROM items i
+    JOIN units u               ON u.id       = i.unit_id
+    JOIN stock_by_location sbl ON sbl.item_id = i.id
+    WHERE i.type = 'SUPPLY'
+    ORDER BY i.name ASC
   `);
 
     return result.rows;

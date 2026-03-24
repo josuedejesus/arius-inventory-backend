@@ -12,7 +12,16 @@ export class LocationsService {
   ) {}
 
   async findAll(filters?: { userId?: string }) {
-    const query = this.db('locations').orderBy('locations.name', 'asc');
+    const query = this.db('locations')
+      .select(
+        'locations.*',
+        this.db.raw(`(
+        SELECT COUNT(*)
+        FROM location_members lm
+        WHERE lm.location_id = locations.id
+      ) as member_count`),
+      )
+      .orderBy('locations.name', 'asc');
 
     if (filters?.userId) {
       query
@@ -21,7 +30,6 @@ export class LocationsService {
           'location_members.location_id',
           'locations.id',
         )
-        .select('locations.*')
         .where('location_members.user_id', filters.userId)
         .distinct();
     }
@@ -126,7 +134,7 @@ export class LocationsService {
         })
         .returning('*');
 
-      if (dto.location_members) {
+      if (dto.location_members?.length) {
         const members = dto.location_members.map((m) => ({
           location_id: location.id,
           user_id: m.id,

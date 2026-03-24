@@ -1,8 +1,9 @@
-import { IsOptional, IsNumber, IsString, IsBoolean, IsArray } from 'class-validator';
+import { IsOptional, IsNumber, IsString, IsBoolean, IsArray, IsEnum } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { LocationType } from '@aws-sdk/client-s3';
+import { ItemType } from '../enums/item-type.enum';
 
-export class ItemUnitFilterDto {
+export class ItemFilterDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -10,26 +11,30 @@ export class ItemUnitFilterDto {
 
   @IsOptional()
   @IsString()
-  internalCode?: string;
+  name?: string;
 
   @IsOptional()
   @IsString()
-  status?: string;
+  brand?: string;
 
   @IsOptional()
   @IsString()
-  condition?: string;
+  model?: string;
 
   @IsOptional()
-  @Type(() => Number)
+  @IsEnum(ItemType)
+  type?: ItemType;
+
+  @IsOptional()
   @IsNumber()
-  locationId?: number;
+  uniId?: number;
 
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
   isActive?: boolean;
 
+  //extras
   @IsOptional()
   @IsString()
   locationType?: LocationType;
@@ -41,4 +46,8 @@ export class ItemUnitFilterDto {
   @IsArray()
   @IsNumber({}, { each: true })
   locationIds?: number[];
+
+  @IsOptional()
+  @Type(() => Boolean)
+  unlimited?: boolean; 
 }

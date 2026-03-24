@@ -27,7 +27,7 @@ export class AuthService {
     const match = await bcrypt.compare(dto.password, user.password_hash);
 
     if (!match) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('Acceso no autorizado.');
     }
 
     const person = await this.personsService.findById(user.person_id);

@@ -117,37 +117,42 @@ export class PersonsService {
   }
 
   async findAll(query: any) {
-    const qb = this.personRepository
-      .createQueryBuilder('person')
-      .leftJoin('person.user', 'user');
+  const qb = this.personRepository
+    .createQueryBuilder('person')
+    .leftJoin('person.user', 'user');
 
-    if (query.locationId) {
-      qb.innerJoin('location_members', 'lm', 'lm.user_id = user.id').andWhere(
-        'lm.location_id = :locationId',
-        {
-          locationId: Number(query.locationId),
-        },
-      );
-    }
-
-    return qb
-      .select([
-        'person.id AS id',
-        'person.name AS name',
-        'person.phone AS phone',
-        'person.email AS email',
-        'person.role AS role',
-        'person.address AS address',
-        'person.rtn AS rtn',
-        'person.created_at AS created_at',
-        'person.updated_at AS updated_at',
-        'user.id AS user_id',
-        'user.username AS username',
-        'user.role AS user_role',
-      ])
-      .orderBy('person.name', 'ASC')
-      .getRawMany();
+  if (query.locationId) {
+    qb.innerJoin('location_members', 'lm', 'lm.user_id = user.id').andWhere(
+      'lm.location_id = :locationId',
+      { locationId: Number(query.locationId) },
+    );
   }
+
+  return qb
+    .select([
+      'person.id AS id',
+      'person.name AS name',
+      'person.phone AS phone',
+      'person.email AS email',
+      'person.role AS role',
+      'person.address AS address',
+      'person.rtn AS rtn',
+      'person.created_at AS created_at',
+      'person.updated_at AS updated_at',
+      'user.id AS user_id',
+      'user.username AS username',
+      'user.role AS user_role',
+    ])
+    .addSelect((sub) =>
+      sub
+        .select('COUNT(lm2.location_id)', 'location_count')
+        .from('location_members', 'lm2')
+        .where('lm2.user_id = user.id'),
+      'location_count',
+    )
+    .orderBy('person.name', 'ASC')
+    .getRawMany();
+}
 
   async findById(id: any, trx: any = null) {
     const db = trx || this.db;

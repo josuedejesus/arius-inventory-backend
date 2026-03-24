@@ -8,11 +8,12 @@ import {
   IsString,
 } from 'class-validator';
 import { ItemType } from '../enums/item-type.enum';
+import { IsRequiredForType } from '../validators/item.validator';
 
 export class UpdateItemDto {
   //Item
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El nombre es obligatorio' })
   name: string;
 
   @IsString()
@@ -24,27 +25,31 @@ export class UpdateItemDto {
   model: string;
 
   @IsEnum(ItemType)
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El tipo es obligatorio' })
   type: ItemType;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El seguimiento es obligatorio' })
   tracking: string;
 
   @IsNumber()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'La unidad es obligatoria' })
   unit_id: number;
 
   @IsBoolean()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El estado activo es obligatorio' })
   is_active: boolean;
 
-  @IsNumber()
   @IsOptional()
+  @IsRequiredForType(ItemType.SUPPLY, {
+    message: 'El campo stock mínimo es obligatorio para el tipo insumo',
+  })
   minimum_stock?: number;
 
-  @IsNumber()
   @IsOptional()
+  @IsRequiredForType(ItemType.TOOL, {
+    message: 'El campo horas de uso es obligatorio para el tipo equipo',
+  })
   usage_hours?: number;
 
   //Accessories

@@ -1,19 +1,19 @@
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class UpdateUnitDto {
-    @IsString()
-    @IsNotEmpty()
-    name: string
+  @IsString()
+  @IsNotEmpty({ message: 'El nombre es obligatorio' })
+  name: string;
 
-    @IsString()
-    @IsNotEmpty()
-    code: string
+  @IsString()
+  @IsNotEmpty({ message: 'El código es obligatorio' })
+  code: string;
 
-    @IsString()
-    @IsOptional()
-    description: string
+  @IsString()
+  @IsOptional()
+  description: string;
 
-    @IsBoolean()
-    @IsNotEmpty()
-    is_active: boolean
+  @IsBoolean()
+  @IsNotEmpty({ message: 'El estado activo es obligatorio' })
+  is_active: boolean;
 }

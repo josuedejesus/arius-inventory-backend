@@ -3,18 +3,18 @@ import { UserRole } from "../enums/user-role.enum";
 
 export class CreateUserDTO {
     @IsString()
-    @IsNotEmpty()
+    @IsNotEmpty({ message: 'El nombre de usuario es obligatorio' })
     username: string
 
     @IsString()
-    @IsNotEmpty()
+    @IsNotEmpty({ message: 'La contraseña es obligatoria' })
     password: string
 
     @IsBoolean()
-    @IsNotEmpty()
+    @IsNotEmpty({ message: 'El estado activo es obligatorio' })
     is_active: boolean
 
     @IsEnum(UserRole)
-    @IsNotEmpty()
+    @IsNotEmpty({ message: 'El rol es obligatorio' })
     role: UserRole
 }

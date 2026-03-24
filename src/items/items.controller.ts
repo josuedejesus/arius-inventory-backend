@@ -7,6 +7,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -23,6 +24,9 @@ import { ItemType } from './enums/item-type.enum';
 import { S3Service } from 'src/s3/s3.service';
 import { UserRole } from 'src/users/enums/user-role.enum';
 import multer from 'multer';
+import { MovementType } from 'src/requisitions/enums/movement-type';
+import { RequisitionType } from 'src/requisitions/enums/requisition-type';
+import { endWith } from 'rxjs';
 
 @Controller('items')
 export class ItemsController {
@@ -106,6 +110,19 @@ export class ItemsController {
     return {
       data: items,
     };
+  }
+
+  @Get('get-catalog')
+  @UseGuards(JwtAuthGuard)
+  async getCatalog(
+    @Query('movement') movement: MovementType,
+    @Query('type') type: RequisitionType,
+    @Req() req: any,
+  ) {
+    const userId = req.user?.sub;
+    const catalog = await this.itemsService.getCatalog(movement, type, userId);
+
+    return catalog;
   }
 
   @Get(':locationId/get-stock')

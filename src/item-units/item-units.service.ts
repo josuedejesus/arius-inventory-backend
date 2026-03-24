@@ -17,6 +17,7 @@ import { ItemUnitStatus } from './enums/item-unit-status.enum';
 import { RequisitionStatus } from 'src/requisitions/enums/requisition-status.enum';
 import { filter } from 'rxjs';
 import { ItemUnitFilterDto } from './dto/item-unit-filter.dto';
+import { CatalogFilter } from 'src/items/helpers/catalog-filter.helper';
 
 @Injectable()
 export class ItemUnitsService {
@@ -428,6 +429,67 @@ export class ItemUnitsService {
     return await query;
   }
 
+  async findAllWithStats(locationId: number, filters?: ItemUnitFilterDto) {
+    const query = this.db('item_units as iu')
+      .join('items as i', 'i.id', 'iu.item_id')
+      .join('units as u', 'u.id', 'i.unit_id')
+      .leftJoin('locations as l', 'l.id', 'iu.location_id')
+      .leftJoin(
+        this.db('item_unit_usage_logs as log_inner')
+          .join('requisitions as r', 'r.id', 'log_inner.requisition_id')
+          .where('r.destination_location_id', locationId)
+          .whereNull('log_inner.hours_used') // solo logs sin cerrar
+          .select(
+            'log_inner.item_unit_id',
+            this.db.raw('MAX(log_inner.created_at) as last_entry_at'),
+          )
+          .groupBy('log_inner.item_unit_id')
+          .as('last_log'),
+        'last_log.item_unit_id',
+        'iu.id',
+      )
+      .where('iu.location_id', locationId) // solo los que están en este proyecto
+      .select(
+        'i.id as item_id',
+        'iu.*',
+        'iu.id as item_unit_id',
+        'i.name',
+        'i.brand',
+        'i.model',
+        'i.type',
+        'i.tracking',
+        'u.code as unit_code',
+        'u.name as unit_name',
+        'l.name as location_name',
+        this.db.raw(`
+        CASE
+          WHEN last_log.last_entry_at IS NOT NULL
+          THEN EXTRACT(DAY FROM NOW() - last_log.last_entry_at)::int
+          ELSE NULL
+        END as days_in_project
+      `),
+        this.db.raw(`
+        CASE
+          WHEN last_log.last_entry_at IS NOT NULL
+          THEN i.usage_hours * (EXTRACT(DAY FROM NOW() - last_log.last_entry_at)::int + 1)
+          ELSE NULL
+        END as estimated_usage_hours
+      `),
+        'last_log.last_entry_at',
+      )
+      .orderBy('i.name', 'asc');
+
+    if (filters?.status) {
+      query.where('iu.status', filters.status);
+    }
+
+    if (filters?.locationType) {
+      query.where('l.type', filters.locationType);
+    }
+
+    return query;
+  }
+
   async findAvailable() {
     return this.db('item_units')
       .join('items', 'items.id', 'item_units.item_id')
@@ -772,5 +834,47 @@ export class ItemUnitsService {
       )
       .where('location_members.user_id', user.id);
     return items;
+  }
+
+  async getCatalog(filter: ItemUnitFilterDto) {
+    const query = this.db('item_units as iu')
+      .join('items as i', 'i.id', 'iu.item_id')
+      .join('units as u', 'u.id', 'i.unit_id')
+      .leftJoin('locations as l', 'l.id', 'iu.location_id')
+      .select(
+        'i.id as item_id',
+        'i.name',
+        'i.brand',
+        'i.model',
+        'i.type',
+        'i.tracking',
+        'u.code as unit_code',
+        'u.name as unit_name',
+        'l.id as location_id',
+        'l.name as location_name',
+        'iu.*',
+      )
+      .orderBy('i.name', 'asc');
+
+    // Status
+    if (filter.status) {
+      if (Array.isArray(filter.status)) {
+        query.whereIn('iu.status', filter.status);
+      } else {
+        query.where('iu.status', filter.status);
+      }
+    }
+
+    // Tipo de ubicación
+    if (filter.locationType) {
+      query.where('l.type', filter.locationType);
+    }
+
+    // Ubicaciones específicas (EXTERNAL)
+    if (filter.locationIds?.length) {
+      query.whereIn('iu.location_id', filter.locationIds);
+    }
+
+    return query;
   }
 }

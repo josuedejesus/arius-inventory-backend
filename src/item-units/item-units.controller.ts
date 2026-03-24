@@ -220,11 +220,20 @@ export class ItemUnitsController {
     return items;
   }
 
+  @Get('get-all-with-stats/:locationId/location')
+  async getAllWithStats(@Param('locationId', ParseIntPipe) locationId: number) {
+    const data = await this.itemUnitsService.findAllWithStats(locationId);
+    console.log('Data with stats:', data);
+    return {
+      success: true,
+      data: data,
+    };
+  }
+
   @Get(':userId/status-stats-by-user')
   @UseGuards(JwtAuthGuard)
   async getStatusStatsByUser(@Param('userId', ParseIntPipe) userId: number) {
     const stats = await this.itemUnitsService.getStatusStatsByUser(userId);
-    console.log('Stats by user:', stats);
     return {
       data: stats,
     };
