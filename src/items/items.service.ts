@@ -318,7 +318,7 @@ export class ItemsService {
         ? this.itemUnitsService.getCatalog(filter.itemUnits as any)
         : Promise.resolve([]),
       filter.supplies !== false
-        ? this.getAvailableSupplies()
+        ? this.findSupplyCatalog(filter.supplies as any)
         : Promise.resolve([]),
     ]);
 
