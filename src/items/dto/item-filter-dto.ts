@@ -49,5 +49,9 @@ export class ItemFilterDto {
 
   @IsOptional()
   @Type(() => Boolean)
-  unlimited?: boolean; 
+  unlimited?: boolean;
+  
+  @IsOptional()
+  @Type(() => Boolean)
+  ignoreLocation?: boolean;
 }

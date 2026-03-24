@@ -19,6 +19,7 @@ export type CatalogFilter = {
         locationType?: LocationType;
         locationIds?: number[];
         unlimited?: boolean; // true = sin límite de stock (PURCHASE_RECEIPT, ADJUSTMENT)
+        ignoreLocation?: boolean; // true = no filtrar por ubicación (PURCHASE_RECEIPT, ADJUSTMENT)
       }
     | false; // false = no cargar supplies
 };
@@ -43,7 +44,7 @@ const getCatalogFilter = (
       case RequisitionType.ADJUSTMENT:
         return {
           itemUnits: { ...locationRestriction, status: ItemUnitStatus.CREATED },
-          supplies: { ...locationRestriction, unlimited: true },
+          supplies: { ...locationRestriction, unlimited: true, ignoreLocation: true },
         };
 
       case RequisitionType.RETURN:
@@ -87,7 +88,10 @@ const getCatalogFilter = (
       case RequisitionType.ADJUSTMENT:
         return {
           itemUnits: { ...locationRestriction, status: ItemUnitStatus.CREATED },
-          supplies: { ...locationRestriction, unlimited: true },
+          supplies: {
+            ...locationRestriction,
+            locationType: LocationType.WAREHOUSE,
+          },
         };
 
       case RequisitionType.MAINTENANCE:

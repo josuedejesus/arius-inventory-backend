@@ -1,6 +1,6 @@
 export enum LocationType {
-  WAREHOUSE,
-  PROJECT,
-  MAINTENANCE,
-  VIRTUAL,
-};
+  WAREHOUSE   = 'WAREHOUSE',
+  PROJECT     = 'PROJECT',
+  MAINTENANCE = 'MAINTENANCE',
+  VIRTUAL     = 'VIRTUAL',
+}

@@ -300,6 +300,7 @@ export class ItemsService {
     type: RequisitionType,
     userId: number,
   ) {
+    console.log('Obteniendo catálogo con:', { movement, type, userId });
     const user = await this.usersService.findById(String(userId));
     const person = await this.personService.findById(user.person_id);
     const assigedLocations = await this.locationService.findByUser(userId);
@@ -332,6 +333,16 @@ export class ItemsService {
   }
 
   async findSupplyCatalog(filter: ItemFilterDto) {
+  console.log('findSupplyCatalog filter:', JSON.stringify(filter));
+  console.log('locationTypeFilter will be:', filter.locationType ? `AND l.type = '${filter.locationType}'` : 'EMPTY');
+    if (filter.ignoreLocation) {
+      return this.db('items as i')
+        .join('units as u', 'u.id', 'i.unit_id')
+        .where('i.type', 'SUPPLY')
+        .select('i.*', 'u.code as unit_code', 'u.name as unit_name')
+        .orderBy('i.name', 'asc');
+    }
+
     const locationTypeFilter = filter.locationType
       ? `AND l.type = '${filter.locationType}'`
       : '';
@@ -350,37 +361,38 @@ export class ItemsService {
         > 0`;
 
     const result = await this.db.raw(`
-    WITH stock_by_location AS (
-      SELECT
-        sm.item_id,
-        l.id   AS location_id,
-        l.name AS location_name,
-        COALESCE(SUM(CASE WHEN sm.destination_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
-        -
-        COALESCE(SUM(CASE WHEN sm.source_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
-        AS available_quantity
-      FROM stock_moves sm
-      JOIN locations l
-        ON l.id = sm.destination_location_id
-        OR l.id = sm.source_location_id
+  WITH stock_by_location AS (
+    SELECT
+      sm.item_id,
+      l.id   AS location_id,
+      l.name AS location_name,
+      COALESCE(SUM(CASE WHEN sm.destination_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+      -
+      COALESCE(SUM(CASE WHEN sm.source_location_id = l.id THEN sm.quantity ELSE 0 END), 0)
+      AS available_quantity
+    FROM stock_moves sm
+    JOIN locations l
+      ON l.id = sm.destination_location_id
+      OR l.id = sm.source_location_id
+    WHERE 1=1
       ${locationTypeFilter}
       ${locationIdsFilter}
-      GROUP BY sm.item_id, l.id, l.name
-      ${havingClause}
-    )
-    SELECT
-      i.*,
-      u.code AS unit_code,
-      u.name AS unit_name,
-      sbl.location_id,
-      sbl.location_name,
-      sbl.available_quantity
-    FROM items i
-    JOIN units u               ON u.id       = i.unit_id
-    JOIN stock_by_location sbl ON sbl.item_id = i.id
-    WHERE i.type = 'SUPPLY'
-    ORDER BY i.name ASC
-  `);
+    GROUP BY sm.item_id, l.id, l.name
+    ${havingClause}
+  )
+  SELECT
+    i.*,
+    u.code AS unit_code,
+    u.name AS unit_name,
+    sbl.location_id,
+    sbl.location_name,
+    sbl.available_quantity
+  FROM items i
+  JOIN units u               ON u.id       = i.unit_id
+  JOIN stock_by_location sbl ON sbl.item_id = i.id
+  WHERE i.type = 'SUPPLY'
+  ORDER BY i.name ASC
+`);
 
     return result.rows;
   }
