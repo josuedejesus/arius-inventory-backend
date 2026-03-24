@@ -42,7 +42,7 @@ export class RequisitionsService {
 
   async create(dto: CreateRequisitionDto) {
     return this.db.transaction(async (trx: any) => {
-      console.log('Creando requisición con DTO:', dto);
+      
       const [requisition] = await trx('requisitions')
         .insert({
           requested_by: dto.requested_by,
@@ -80,7 +80,7 @@ export class RequisitionsService {
           } else {
             if (
               dto.type !== RequisitionType.PURCHASE_RECEIPT &&
-              dto.type !== RequisitionType.ADJUSTMENT
+              dto.type !== RequisitionType.ADJUSTMENT && dto.type !== RequisitionType.CONSUMPTION
             ) {
               if (!l.source_location_id) {
                 throw new Error(
@@ -111,6 +111,8 @@ export class RequisitionsService {
           };
         }),
       );
+
+
 
       const linesData = lines.map(({ _accessories, ...line }) => line);
 
@@ -314,9 +316,7 @@ export class RequisitionsService {
         })
         .update(updateData);
 
-      console.log('movimientos a crear:', requisition.movement);
 
-      console.log('Líneas de la requisición:', lines);
 
       const movements = lines.map((l) => ({
         requisition_id: requisition.id,
