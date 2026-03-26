@@ -66,7 +66,7 @@ export class AdjustmentHandler implements RequisitionHandler {
 
     // 🔥 USAGE LOGS
     const logPayload = ids.map((id: number) => ({
-      item_unit_id: id,
+      item_unit_id: String(id),
       requisition_id: requisition.id,
       start_at: new Date(),
       created_at: new Date(),

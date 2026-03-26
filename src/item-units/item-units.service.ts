@@ -43,6 +43,35 @@ export class ItemUnitsService {
     });
   }
 
+  async update(dto: UpdateItemUnitDto, id: number) {
+    return this.db.transaction(async (trx) => {
+      const item = await this.itemsService.findById(String(dto.item_id), trx);
+
+      if (!item) {
+        throw new NotFoundException('Articulo no encontrado');
+      }
+
+      const [unit] = await trx('item_units')
+        .where({
+          id: dto.id,
+        })
+        .update({
+          serial_number: dto.serial_number,
+          internal_code: dto.internal_code,
+          status: dto.status,
+          condition: dto.condition,
+          observations: dto.observations,
+          is_active: dto.is_active,
+          description: dto.description,
+          updated_at: new Date(),
+          image_path: dto.image_path,
+        })
+        .returning('*');
+
+      return unit;
+    });
+  }
+
   async createMany(dtos: CreateItemUnitDto[], trx: any) {
     return this.db('item_units').insert(dtos).transacting(trx);
   }
@@ -132,35 +161,6 @@ export class ItemUnitsService {
     };
   }
 
-  async update(dto: UpdateItemUnitDto, id: number) {
-    return this.db.transaction(async (trx) => {
-      const item = await this.itemsService.findById(String(dto.item_id), trx);
-
-      if (!item) {
-        throw new NotFoundException('Articulo no encontrado');
-      }
-
-      const [unit] = await trx('item_units')
-        .where({
-          id: dto.id,
-        })
-        .update({
-          serial_number: dto.serial_number,
-          internal_code: dto.internal_code,
-          status: dto.status,
-          condition: dto.condition,
-          observations: dto.observations,
-          is_active: dto.is_active,
-          description: dto.description,
-          updated_at: new Date(),
-          image_path: dto.image_path,
-        })
-        .returning('*');
-
-      return unit;
-    });
-  }
-
   async updateManyLocation(units: any[], locationId: number, trx: any = null) {
     const db = this.db || trx;
 
@@ -210,7 +210,7 @@ export class ItemUnitsService {
         'items.tracking',
         'units.code as unit_code',
         'units.name as unit_name',
-        'locations.name as location',
+        'locations.name as location_name',
       )
       .where('item_units.item_id', itemId)
       .orderBy('item_units.id', 'asc');
@@ -414,7 +414,7 @@ export class ItemUnitsService {
         'items.tracking',
         'units.code as unit_code',
         'units.name as unit_name',
-        'locations.name as location',
+        'locations.name as location_name',
       )
       .orderBy('items.name', 'asc');
 
@@ -506,7 +506,7 @@ export class ItemUnitsService {
         'items.tracking',
         'units.code as unit_code',
         'units.name as unit_name',
-        'locations.name as location',
+        'locations.name as location_name',
       )
       .where({
         'item_units.status': 'AVAILABLE',
@@ -531,7 +531,7 @@ export class ItemUnitsService {
         'items.tracking',
         'units.code as unit_code',
         'units.name as unit_name',
-        'locations.name as location',
+        'locations.name as location_name',
       )
       .where({
         'item_units.status': 'AVAILABLE',
@@ -625,7 +625,7 @@ export class ItemUnitsService {
         'items.tracking',
         'units.code as unit_code',
         'units.name as unit_name',
-        'locations.name as location',
+        'locations.name as location_name',
       );
 
     if (
@@ -682,7 +682,7 @@ export class ItemUnitsService {
         'units.code as unit_code',
         'units.name as unit_name',
 
-        'locations.name as location',
+        'locations.name as location_name',
 
         this.db.raw(`
         CASE 

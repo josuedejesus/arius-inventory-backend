@@ -1,5 +1,6 @@
 import { IsArray, IsDate, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from "class-validator";
 import { RequisitionType } from "../enums/requisition-type";
+import { MovementType } from "../enums/movement-type";
 
 export class UpdateRequisitionDto {
     @IsNumber()
@@ -9,6 +10,10 @@ export class UpdateRequisitionDto {
     @IsNumber()
     @IsOptional()
     destination_location_id: number
+
+    @IsEnum(MovementType)
+    @IsNotEmpty()
+    movement: MovementType
 
     @IsEnum(RequisitionType)
     @IsNotEmpty()

@@ -1,4 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { RequisitionLineViewModel } from './dto/requisition-line-view.model';
+import { RequisitionLineMapper } from './mappers/requisition-lines.mapper';
 
 @Injectable()
 export class RequisitionLinesService {
@@ -14,7 +16,10 @@ export class RequisitionLinesService {
     return createdLines;
   }
 
-  async findByRequisitionId(requisitionId: number, trx: any = null) {
+  async findByRequisitionId(
+    requisitionId: number,
+    trx: any = null,
+  ): Promise<RequisitionLineViewModel[]> {
     const db = trx || this.db;
     const lines = await db('requisition_lines')
       .join('items', 'items.id', 'requisition_lines.item_id')
@@ -96,6 +101,7 @@ export class RequisitionLinesService {
       )
 
       .where('requisition_lines.requisition_id', requisitionId)
+      .andWhere('requisition_lines.is_deleted', false)
 
       .groupBy(
         'requisition_lines.id',
@@ -116,7 +122,9 @@ export class RequisitionLinesService {
         'destination_location.name',
       );
 
-    return lines;
+    const mappedLines = RequisitionLineMapper.toViewModelList(lines);
+
+    return mappedLines;
   }
 
   async findItemsByRequisitionId(requisitionId: number) {
@@ -127,8 +135,15 @@ export class RequisitionLinesService {
       .select('item_units.*');
   }
 
-  async updateMany(lines: any, trx: any = null) {
+  async updateMany(lines: any[], trx: any = null) {
     const db = trx || this.db;
+
+    await Promise.all(
+      lines.map((line: any) => {
+        const { id, ...data } = line;
+        return db('requisition_lines').where({ id }).update(data);
+      }),
+    );
 
     return true;
   }

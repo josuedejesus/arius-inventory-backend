@@ -7,6 +7,9 @@ export class RequisitionViewModel {
     @IsNumber()
     id: number
 
+    @IsString()
+    code: string
+
     @IsNumber()
     requested_by: number
 

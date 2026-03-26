@@ -29,20 +29,15 @@ import { MovementType } from './enums/movement-type';
 export class RequisitionsService {
   constructor(
     @Inject('KNEX') private readonly db: any,
-    private readonly locationsService: LocationsService,
-    private readonly personService: PersonsService,
-    private readonly userService: UsersService,
     private readonly requisitionLinesService: RequisitionLinesService,
     private readonly stockMovesService: StockMovesService,
     private readonly itemUnitsService: ItemUnitsService,
     private readonly eventsService: EventsService,
     private readonly ItemUnitUsageLogsService: ItemUnitUsageLogsService,
-    private readonly requisitionHandlerFactory: RequisitionHandlerFactory,
   ) {}
 
   async create(dto: CreateRequisitionDto) {
     return this.db.transaction(async (trx: any) => {
-      
       const [requisition] = await trx('requisitions')
         .insert({
           requested_by: dto.requested_by,
@@ -80,7 +75,8 @@ export class RequisitionsService {
           } else {
             if (
               dto.type !== RequisitionType.PURCHASE_RECEIPT &&
-              dto.type !== RequisitionType.ADJUSTMENT && dto.type !== RequisitionType.CONSUMPTION
+              dto.type !== RequisitionType.ADJUSTMENT &&
+              dto.type !== RequisitionType.CONSUMPTION
             ) {
               if (!l.source_location_id) {
                 throw new Error(
@@ -111,8 +107,6 @@ export class RequisitionsService {
           };
         }),
       );
-
-
 
       const linesData = lines.map(({ _accessories, ...line }) => line);
 
@@ -149,6 +143,9 @@ export class RequisitionsService {
         .where({ id: requisitionId })
         .first();
       if (!requisition) throw new NotFoundException('Requisicion no existe');
+
+      if (requisition.status !== RequisitionStatus.DRAFT)
+        throw new BadRequestException('La requisición debe estar fue aprobada');
 
       const lines = await this.requisitionLinesService.findByRequisitionId(
         requisition.id,
@@ -228,6 +225,10 @@ export class RequisitionsService {
             (line: any) => line.id && Number(line.id) === Number(l.id),
           ),
       );
+
+      console.log('lines to update', linesToUpdate);
+
+      //throw new ConflictException('Debugging');
 
       await Promise.all([
         ...linesToCreate.map((line: any) =>
@@ -315,8 +316,6 @@ export class RequisitionsService {
           id: requisitionId,
         })
         .update(updateData);
-
-
 
       const movements = lines.map((l) => ({
         requisition_id: requisition.id,
@@ -457,7 +456,7 @@ export class RequisitionsService {
         await this.ItemUnitUsageLogsService.createMany(
           linesToProject.map((l: any) => ({
             item_unit_id: l.item_unit_id,
-            requisition_id: requisitionId,
+            requisition_id: String(requisitionId),
             start_at: receiptDate,
             created_at: receiptDate,
           })),

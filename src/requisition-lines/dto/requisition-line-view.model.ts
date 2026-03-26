@@ -1,4 +1,11 @@
-import { IsBoolean, IsDate, IsEnum, IsNumber, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsDate,
+  IsEnum,
+  IsNumber,
+  IsString,
+} from 'class-validator';
 import { ItemUnitStatus } from 'src/item-units/enums/item-unit-status.enum';
 
 export class RequisitionLineViewModel {
@@ -10,6 +17,9 @@ export class RequisitionLineViewModel {
 
   @IsNumber()
   item_id: number;
+
+  @IsNumber()
+  item_unit_id: number;
 
   @IsNumber()
   quantity: number;
@@ -37,13 +47,13 @@ export class RequisitionLineViewModel {
 
   //extras
   @IsString()
-  item_name: string;
+  name: string;
 
   @IsString()
-  item_brand: string;
+  brand: string;
 
   @IsString()
-  item_model: string;
+  model: string;
 
   @IsNumber()
   internal_code: number;
@@ -65,4 +75,13 @@ export class RequisitionLineViewModel {
 
   @IsString()
   destination_location_name: string;
+
+  @IsNumber()
+  photos_count: number;
+
+  @IsBoolean()
+  has_return: boolean;
+
+  @IsArray()
+  accessories: any[];
 }
