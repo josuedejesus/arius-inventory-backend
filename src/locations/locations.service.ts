@@ -216,9 +216,21 @@ export class LocationsService {
       .groupBy('l.id', 'l.name', 'l.type')
       .orderBy(['l.type', { column: 'total_units', order: 'desc' }]);
 
+      const totalUnits = rows.reduce((sum, row) => sum + Number(row.total_units), 0);
+
     return {
       active_locations: rows.length,
+      total_units: totalUnits,
       locations: rows,
     };
+  }
+
+  async countActiveLocations() {
+    const result = await this.db('item_units as iu')
+      .whereNotNull('iu.location_id')
+      .countDistinct('iu.location_id as total')
+      .first();
+
+    return Number(result?.total || 0);
   }
 }

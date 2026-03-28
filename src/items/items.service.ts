@@ -305,6 +305,8 @@ export class ItemsService {
     const person = await this.personService.findById(user.person_id);
     const assigedLocations = await this.locationService.findByUser(userId);
 
+    console.log('assignedLocations:', assigedLocations);
+
     const filter = getCatalogFilter(
       movement,
       type,
@@ -333,8 +335,11 @@ export class ItemsService {
   }
 
   async findSupplyCatalog(filter: ItemFilterDto) {
-  console.log('findSupplyCatalog filter:', JSON.stringify(filter));
-  console.log('locationTypeFilter will be:', filter.locationType ? `AND l.type = '${filter.locationType}'` : 'EMPTY');
+    console.log('findSupplyCatalog filter:', JSON.stringify(filter));
+    console.log(
+      'locationTypeFilter will be:',
+      filter.locationType ? `AND l.type = '${filter.locationType}'` : 'EMPTY',
+    );
     if (filter.ignoreLocation) {
       return this.db('items as i')
         .join('units as u', 'u.id', 'i.unit_id')
@@ -560,6 +565,56 @@ export class ItemsService {
     return result;
   }
 
+  async getSuppliesCount(filter?: CatalogFilter) {
+    const db = this.db;
+
+    if (!filter?.supplies) return 0;
+
+    const supplyFilter = filter.supplies;
+
+    let incomingCondition = '1=1';
+    let outgoingCondition = '1=1';
+    let bindings: any[] = [];
+
+    if (supplyFilter.locationIds?.length) {
+      incomingCondition = `ld.id = ANY(?)`;
+      outgoingCondition = `ls.id = ANY(?)`;
+      bindings.push(supplyFilter.locationIds, supplyFilter.locationIds);
+    } else if (supplyFilter.locationType) {
+      incomingCondition = `ld.type = ?`;
+      outgoingCondition = `ls.type = ?`;
+      bindings.push(supplyFilter.locationType, supplyFilter.locationType);
+    }
+
+    const baseQuery = db
+      .select(
+        'i.id',
+        db.raw(
+          `
+        COALESCE(
+          SUM(CASE WHEN ${incomingCondition} THEN sm.quantity ELSE 0 END)
+          -
+          SUM(CASE WHEN ${outgoingCondition} THEN sm.quantity ELSE 0 END),
+        0) as stock
+      `,
+          bindings,
+        ),
+      )
+      .from('items as i')
+      .where('i.type', 'SUPPLY')
+      .leftJoin('stock_moves as sm', 'sm.item_id', 'i.id')
+      .leftJoin('locations as ld', 'ld.id', 'sm.destination_location_id')
+      .leftJoin('locations as ls', 'ls.id', 'sm.source_location_id')
+      .groupBy('i.id');
+
+    const result = await db
+      .from(baseQuery.as('s'))
+      .select(db.raw('COALESCE(SUM(stock::numeric), 0) as total_stock'))
+      .first();
+
+    return Number(result?.total_stock || 0);
+  }
+
   async getItemStockLevels() {
     const db = this.db;
 
@@ -568,10 +623,12 @@ export class ItemsService {
       .leftJoin('stock_moves as sm', 'sm.item_id', 'i.id')
       .leftJoin('locations as ld', 'ld.id', 'sm.destination_location_id')
       .leftJoin('locations as ls', 'ls.id', 'sm.source_location_id')
+      .join('units as u', 'u.id', 'i.unit_id')
       .select(
         'i.id',
         'i.name',
         'i.minimum_stock',
+        'u.code as unit_code',
         db.raw(`
         COALESCE(
           SUM(CASE WHEN ld.type = 'WAREHOUSE' THEN sm.quantity ELSE 0 END)
@@ -580,7 +637,7 @@ export class ItemsService {
         0) as stock
       `),
       )
-      .groupBy('i.id', 'i.name', 'i.minimum_stock');
+      .groupBy('i.id', 'i.name', 'i.minimum_stock', 'u.code');
   }
 
   async getStockByLocation(locationId: number) {

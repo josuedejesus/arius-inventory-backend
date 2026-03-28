@@ -121,6 +121,24 @@ export class UsersService {
     });
   }
 
+  async countActiveUsers() {
+    const result = await this.db('users as u')
+      .whereExists(function () {
+        this.select(1)
+          .from('location_members as lm')
+          .whereRaw('lm.user_id = u.id')
+          .whereExists(function () {
+            this.select(1)
+              .from('item_units as iu')
+              .whereRaw('iu.location_id = lm.location_id');
+          });
+      })
+      .countDistinct('u.id as total')
+      .first();
+
+    return Number(result?.total || 0);
+  }
+
   async findById(id: string, trx: any = null) {
     const db = trx || this.db;
 

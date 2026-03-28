@@ -176,6 +176,18 @@ export class ItemUnitsService {
     return db('item_units').whereIn('id', unitIds).update(payload);
   }
 
+  async getCount(filter?: ItemUnitFilterDto) {
+    const query = this.db('item_units').count('id as count');
+    if (filter?.status) {
+      query.where('status', filter.status);
+    }
+    if (filter?.locationId) {
+      query.where('location_id', filter.locationId);
+    }
+    const result = await query.first();
+    return Number(result?.count ?? 0);
+  }
+
   async findById(unitId: string) {
     return this.db('item_units')
       .join('items', 'items.id', 'item_units.item_id')

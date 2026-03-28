@@ -644,6 +644,8 @@ export class RequisitionsService {
 
     const items = await query;
 
+    console.log('Items', items);
+
     return {
       items,
       total,

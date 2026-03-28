@@ -22,6 +22,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PdfService } from './pdf/pdf.service';
 import { PdfModule } from './pdf/pdf.module';
 import { S3Module } from './s3/s3.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { S3Module } from './s3/s3.module';
     }),
     PdfModule,
     S3Module,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService, PdfService],

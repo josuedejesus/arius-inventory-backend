@@ -93,23 +93,44 @@ export class StockMovesService {
   }
 
   async findByUnitId(unitId: string) {
-    return this.db('stock_moves')
+    return this.db('stock_moves as sm')
       .leftJoin(
         { source_location: 'locations' },
         'source_location.id',
-        'stock_moves.source_location_id',
+        'sm.source_location_id',
       )
       .leftJoin(
         { destination_location: 'locations' },
         'destination_location.id',
-        'stock_moves.destination_location_id',
+        'sm.destination_location_id',
       )
-      .where('stock_moves.item_unit_id', unitId)
+      .where('sm.item_unit_id', unitId)
+
+      .where(function () {
+        this.whereNotNull('sm.source_location_id').orWhereNotNull(
+          'sm.destination_location_id',
+        );
+      })
+
       .select(
-        'stock_moves.*',
+        'sm.*',
+
         'source_location.name as source_location_name',
         'destination_location.name as destination_location_name',
-      )
-      .orderBy('stock_moves.id', 'desc');
+
+        this.db.raw(`
+        CASE 
+          WHEN sm.source_location_id IS NOT NULL THEN sm.executed_at
+          WHEN sm.destination_location_id IS NOT NULL THEN sm.received_at
+          ELSE COALESCE(sm.executed_at, sm.received_at)
+        END as movement_date
+      `),
+      ).orderByRaw(`
+      CASE 
+        WHEN sm.source_location_id IS NOT NULL THEN sm.executed_at
+        WHEN sm.destination_location_id IS NOT NULL THEN sm.received_at
+        ELSE COALESCE(sm.executed_at, sm.received_at)
+      END DESC
+    `);
   }
 }

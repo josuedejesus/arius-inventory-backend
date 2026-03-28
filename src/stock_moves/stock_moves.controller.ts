@@ -16,7 +16,7 @@ export class StockMovesController {
     };
   }
 
-  @Get('get-by-item-unit/:unitId')
+  @Get(':unitId/item-unit')
   @UseGuards(JwtAuthGuard)
   async findByItemUnitId(@Param('unitId') unitId: string) {
     const movements = await this.stockMovesService.findByUnitId(unitId);

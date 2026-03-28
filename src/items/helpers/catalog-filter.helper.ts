@@ -130,6 +130,15 @@ const getCatalogFilter = (
           },
         };
 
+      case RequisitionType.RETURN:
+        return {
+          itemUnits: { ...locationRestriction, status: ItemUnitStatus.RENTED },
+          supplies: {
+            ...locationRestriction,
+            locationType: LocationType.PROJECT,
+          },
+        };
+
       default:
         return { itemUnits: false, supplies: false };
     }

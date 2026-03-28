@@ -234,10 +234,10 @@ export function requisitionTemplate(data: any) {
 
                     <td>
                         <div style="font-weight: 600;">
-                        ${item.item_name}
+                        ${item.name}
                         </div>
                         <div style="font-size: 10px; color: #6b7280;">
-                        ${item.item_brand || ''} ${item.item_model || ''}
+                        ${item.brand || ''} ${item.model || ''}
                         </div>
                     </td>
 
