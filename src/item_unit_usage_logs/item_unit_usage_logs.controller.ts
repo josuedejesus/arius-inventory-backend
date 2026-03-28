@@ -7,7 +7,7 @@ export class ItemUnitUsageLogsController {
     private readonly itemUnitUsageLogsService: ItemUnitUsageLogsService,
   ) {}
 
-  @Get('/get-by-item-unit/:unitId')
+  @Get(':unitId/item-unit')
   async getByItemUnit(@Param('unitId') unitId: string) {
     const usageLogs =
       await this.itemUnitUsageLogsService.findByItemUnit(unitId);
