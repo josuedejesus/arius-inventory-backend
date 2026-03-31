@@ -17,4 +17,14 @@ export class ItemUnitUsageLogsController {
       data: usageLogs,
     };
   }
+
+  @Get(':unitId/last-active')
+  async getLastActiveByItemUnit(@Param('unitId') unitId: string) {
+    const usageLog =
+      await this.itemUnitUsageLogsService.findLastActiveByItemUnit(unitId);
+
+    console.log('Last active usage log for unit', unitId, usageLog);
+
+    return usageLog;
+  }
 }

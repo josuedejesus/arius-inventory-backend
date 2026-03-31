@@ -305,16 +305,12 @@ export class ItemsService {
     const person = await this.personService.findById(user.person_id);
     const assigedLocations = await this.locationService.findByUser(userId);
 
-    console.log('assignedLocations:', assigedLocations);
-
     const filter = getCatalogFilter(
       movement,
       type,
       person.role,
       assigedLocations.map((l) => l.id),
     );
-
-    console.log('Catalog filter:', filter);
 
     const [itemUnits, supplies] = await Promise.all([
       filter.itemUnits !== false

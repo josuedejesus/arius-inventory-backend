@@ -5,11 +5,13 @@ import { DatabaseModule } from 'src/database/database.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Person } from './entities/person.entity';
 import { User } from 'src/users/entities/user.entity';
+import { LocationsModule } from 'src/locations/locations.module';
+import { LocationMembersModule } from 'src/location_members/location_members.module';
 
 @Module({
   controllers: [PersonsController],
   providers: [PersonsService],
-  imports: [DatabaseModule, TypeOrmModule.forFeature([Person, User])],
+  imports: [DatabaseModule, TypeOrmModule.forFeature([Person, User]), LocationsModule, LocationMembersModule],
   exports: [PersonsService],
 })
 export class PersonsModule {}

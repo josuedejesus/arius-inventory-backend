@@ -44,7 +44,11 @@ const getCatalogFilter = (
       case RequisitionType.ADJUSTMENT:
         return {
           itemUnits: { ...locationRestriction, status: ItemUnitStatus.CREATED },
-          supplies: { ...locationRestriction, unlimited: true, ignoreLocation: true },
+          supplies: {
+            ...locationRestriction,
+            unlimited: true,
+            ignoreLocation: true,
+          },
         };
 
       case RequisitionType.RETURN:
@@ -146,6 +150,27 @@ const getCatalogFilter = (
 
   // ─── INT ──────────────────────────────────────────
   if (movement === MovementType.INT) {
+    switch (type) {
+      case RequisitionType.INTERNAL_TRANSFER:
+        return {
+          itemUnits: {
+            ...locationRestriction,
+            status: ItemUnitStatus.AVAILABLE,
+            locationType: LocationType.WAREHOUSE
+          },
+          supplies: {
+            ...locationRestriction,
+            locationType: LocationType.WAREHOUSE,
+            unlimited: false
+          }
+        };
+      default:
+        return { itemUnits: false, supplies: false };
+    }
+  }
+
+  // ─── EXT ──────────────────────────────────────────
+  if (movement === MovementType.EXT) {
     switch (type) {
       case RequisitionType.TRANSFER:
         return {

@@ -133,4 +133,10 @@ export class StockMovesService {
       END DESC
     `);
   }
+
+  async findByRequisitionId(requisitionId: number) {
+    return this.db('stock_moves')
+      .where('requisition_id', requisitionId)
+      .andWhere('is_deleted', false);
+  }
 }

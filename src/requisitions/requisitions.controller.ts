@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   NotFoundException,
   Param,
+  ParseIntPipe,
   Post,
   Put,
   Query,
@@ -41,6 +43,15 @@ export class RequisitionsController {
       success: true,
       message: `Requisicion creada exitosamente`,
     };
+  }
+
+  @Delete(':id/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'OPERATION_MANAGER')
+  async cancel(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const user = req.user;
+    await this.requisitionsService.cancel(id, user.sub);
+    return true;
   }
 
   @Put(':id')
@@ -128,10 +139,7 @@ export class RequisitionsController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  async findAll(
-    @Req() req: any,
-    @Query() request?: PagedRequestDto,
-  ) {
+  async findAll(@Req() req: any, @Query() request?: PagedRequestDto) {
     const user = req.user;
 
     const privilegedRoles = ['ADMIN', 'WAREHOUSE_MANAGER', 'OPERATION_MANAGER'];
@@ -142,8 +150,10 @@ export class RequisitionsController {
       userFilter = { personId: user.person_id };
     }
 
-
-    const pagedResult = await this.requisitionsService.findAll(userFilter, request);
+    const pagedResult = await this.requisitionsService.findAll(
+      userFilter,
+      request,
+    );
     return pagedResult;
   }
 }

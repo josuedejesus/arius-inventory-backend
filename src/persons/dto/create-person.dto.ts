@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsInt,
@@ -43,4 +44,9 @@ export class CreatePersonDto {
   @ValidateNested()
   @Type(() => CreateUserDTO)
   user?: CreateUserDTO;
+
+  //locations
+  @IsOptional()
+  @IsArray()
+  locations?: any[]
 }

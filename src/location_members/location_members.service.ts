@@ -17,6 +17,13 @@ export class LocationMembersService {
       .del();
   }
 
+  async removeManyByUser(userId: number, locationIds: number[], trx: any) {
+    return trx('location_members')
+      .where('user_id', userId)
+      .whereIn('location_id', locationIds)
+      .del();
+  }
+
   async getByLocationId(locationId: number) {
     return this.db('location_members')
       .join('users', 'location_members.user_id', 'users.id')

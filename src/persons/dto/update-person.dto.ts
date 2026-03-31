@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsInt,
@@ -46,4 +47,9 @@ export class UpdatePersonDto {
     @ValidateNested()
     @Type(() => UpdateUserDto)
     user?: UpdateUserDto;
+
+  //locations
+    @IsOptional()
+    @IsArray()
+    locations?: any[]
 }
