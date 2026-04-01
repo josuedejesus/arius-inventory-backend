@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { RequisitionLineViewModel } from './dto/requisition-line-view.model';
 import { RequisitionLineMapper } from './mappers/requisition-lines.mapper';
+import { RequisitionStatus } from 'src/requisitions/enums/requisition-status.enum';
 
 @Injectable()
 export class RequisitionLinesService {
@@ -214,5 +215,35 @@ export class RequisitionLinesService {
     const db = trx || this.db;
 
     return await db('requisition_lines').whereIn('id', ids);
+  }
+
+  async getToSend() {
+    const lines = await this.db('requisition_lines')
+      .join(
+        'requisitions',
+        'requisitions.id',
+        'requisition_lines.requisition_id',
+      )
+      .leftJoin('item_units', 'item_units.id', 'requisition_lines.item_unit_id')
+      .join('items', 'items.id', 'requisition_lines.item_id')
+      .join('units', 'units.id', 'items.unit_id')
+      .leftJoin('locations as source_location', 'source_location.id', 'requisition_lines.source_location_id')
+      .leftJoin('locations as destination_location', 'destination_location.id', 'requisition_lines.destination_location_id')
+      .select(
+        'requisition_lines.*',
+        'requisitions.movement',
+        'requisitions.type',
+        'requisitions.status as requisition_status',
+        'items.name',
+        'items.model',
+        'items.brand',
+        'item_units.internal_code',
+        'units.code as unit_code',
+        'units.name as unit_name',
+        'source_location.name as source_location_name',
+        'destination_location.name as destination_location_name',
+      )
+      .whereIn('requisitions.status', [RequisitionStatus.APPROVED, RequisitionStatus.IN_PROGRESS]);
+      return lines;
   }
 }

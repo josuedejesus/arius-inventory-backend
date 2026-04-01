@@ -29,6 +29,13 @@ export class RequisitionLinesController {
     };
   }
 
+  @Get('to-send')
+  async getToSend() {
+    const lines = await this.requisitionLinesService.getToSend();
+    console.log('Lines to send', lines);
+    return lines;
+  }
+
   @Get(':requisitionId/requisition')
   async FindByRequisitionId(@Param('requisitionId') requisitionId: string) {
     const lines = await this.requisitionLinesService.findByRequisitionId(
