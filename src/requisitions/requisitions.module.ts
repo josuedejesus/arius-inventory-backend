@@ -38,6 +38,7 @@ import { ReturnHandler } from './handlers/return.handler';
     ItemUnitsModule,
     EventsModule,
     ItemUnitUsageLogsModule,
+    LocationsModule
   ],
   exports: [RequisitionsService],
 })

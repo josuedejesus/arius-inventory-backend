@@ -34,7 +34,7 @@ export class LocationMembersService {
       .select('users.id', 'persons.name');
   }
 
-  async getByPersonId(userId: number) {
+  async getByUserId(userId: number) {
     return this.db('location_members')
       .join('users', 'location_members.user_id', 'users.id')
       .join('locations', 'location_members.location_id', 'locations.id')

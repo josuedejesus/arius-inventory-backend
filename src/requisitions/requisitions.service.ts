@@ -27,6 +27,7 @@ import {
 } from './requisition-status.helper';
 import { RequisitionType } from './enums/requisition-type';
 import { MovementType } from './enums/movement-type';
+import { LocationType } from 'src/locations/types/location-type';
 
 @Injectable()
 export class RequisitionsService {
@@ -37,6 +38,7 @@ export class RequisitionsService {
     private readonly itemUnitsService: ItemUnitsService,
     private readonly eventsService: EventsService,
     private readonly ItemUnitUsageLogsService: ItemUnitUsageLogsService,
+    private readonly locationsService: LocationsService,
   ) {}
 
   async create(dto: CreateRequisitionDto) {
@@ -76,20 +78,18 @@ export class RequisitionsService {
 
             source_location_id = itemUnit.location_id;
           } else {
-            if (
+            /*if (
               dto.type !== RequisitionType.PURCHASE_RECEIPT &&
               dto.type !== RequisitionType.ADJUSTMENT &&
               dto.type !== RequisitionType.CONSUMPTION
             ) {
-              console.log(l);
+              console.log('Validando requisición de tipo:', dto.type);
               if (!l.source_location_id) {
                 throw new Error(
                   'Debe especificar ubicación origen para supplies',
                 );
               }
             } else {
-                            console.log(l);
-
               if (dto.movement === MovementType.OUT) {
                 if (!l.source_location_id) {
                   throw new Error(
@@ -97,8 +97,10 @@ export class RequisitionsService {
                   );
                 }
                 source_location_id = l.source_location_id;
+                console.log(l.source_location_id);
               }
-            }
+            }*/
+            source_location_id = l.source_location_id;
           }
 
           return {
@@ -113,6 +115,10 @@ export class RequisitionsService {
           };
         }),
       );
+
+      console.log('Requisition lines to create:', lines);
+
+      //throw new Error('Debugging - movement OUT');
 
       const linesData = lines.map(({ _accessories, ...line }) => line);
 
@@ -148,6 +154,7 @@ export class RequisitionsService {
       const requisition = await trx('requisitions')
         .where({ id: requisitionId })
         .first();
+
       if (!requisition) throw new NotFoundException('Requisicion no existe');
 
       if (requisition.status !== RequisitionStatus.DRAFT)
@@ -157,12 +164,18 @@ export class RequisitionsService {
         requisition.id,
       );
 
-      await this.validateRequisitionLines(lines, requisition.type, trx);
+      await this.validateRequisitionLines(
+        lines,
+        requisition.type,
+        requisition.status,
+        trx,
+      );
 
       const itemsUnits =
         await this.requisitionLinesService.findItemsByRequisitionId(
           requisition.id,
         );
+
       const itemUnitIds = itemsUnits.map((u: any) => u.id);
 
       if (itemUnitIds.length > 0) {
@@ -231,8 +244,6 @@ export class RequisitionsService {
             (line: any) => line.id && Number(line.id) === Number(l.id),
           ),
       );
-
-      console.log('lines to update', linesToUpdate);
 
       //throw new ConflictException('Debugging');
 
@@ -305,7 +316,12 @@ export class RequisitionsService {
         requisition.id,
       );
 
-      await this.validateRequisitionLines(lines, requisition.type, trx);
+      await this.validateRequisitionLines(
+        lines,
+        requisition.type,
+        requisition.status,
+        trx,
+      );
 
       const invalidLines = lines.filter(
         (l: any) => Number(l.photos_count) === 0,
@@ -396,14 +412,34 @@ export class RequisitionsService {
         locations.map((l: any) => [l.id, l.type]),
       );
 
+      let location;
+      if (requisition.destination_location_id) {
+        location = await this.locationsService.findById(
+          requisition.destination_location_id,
+        );
+      }
+
       await Promise.all(
         lines
           .filter((l: any) => l.item_unit_id)
           .map((line: any) => {
-            const { status } = getStatusAfterReceive(
+            /*const { status } = getStatusAfterReceive(
               requisition.movement,
               requisition.type,
-            );
+            );*/
+
+            let status;
+
+            if (location) {
+              status = this.resolveReceiveStatusByLocation(location.type);
+            } else {
+              status = this.resolveReceiveStatusByRequisitionType(
+                requisition.type,
+              );
+            }
+            console.log(status);
+
+            //throw new NotFoundException('DEBUGGING');
 
             const destinationId = requisition.destination_location_id;
 
@@ -473,6 +509,26 @@ export class RequisitionsService {
     });
   }
 
+  private resolveReceiveStatusByLocation(locationType: LocationType) {
+    switch (locationType) {
+      case LocationType.WAREHOUSE:
+        return ItemUnitStatus.AVAILABLE;
+      case LocationType.PROJECT:
+        return ItemUnitStatus.RENTED;
+      case LocationType.MAINTENANCE:
+        return ItemUnitStatus.MAINTENANCE;
+    }
+  }
+
+  private resolveReceiveStatusByRequisitionType(
+    requisitionType: RequisitionType,
+  ) {
+    switch (requisitionType) {
+      case RequisitionType.OUT_OF_SERVICE:
+        return ItemUnitStatus.OUT_OF_SERVICE;
+    }
+  }
+
   async cancel(requisitionId: number, userId: number) {
     return this.db.transaction(async (trx: any) => {
       const requisition = await this.findById(requisitionId, trx);
@@ -489,52 +545,57 @@ export class RequisitionsService {
       };
 
       if (![RequisitionStatus.DRAFT].includes(requisition.status)) {
-        //revertir movimientos
-        const stockMoves = await this.stockMovesService.findByRequisitionId(
+        const { status } = getCancelStatus(
+          requisition.movement,
+          requisition.type,
+        );
+
+        const lines = await this.requisitionLinesService.findByRequisitionId(
           requisition.id,
         );
 
-        const reversedStockMoves = stockMoves.map(({ id, ...sm }: any) => ({
-          ...sm,
-          source_location_id: sm.destination_location_id,
-          destination_location_id: sm.source_location_id,
-          reversed_from_id: id,
-          executed_at: new Date(),
-          received_at: new Date(),
-        }));
+        //construir datos de articulos
+        const itemUnitsPayload = lines
+          .filter((l) => l.item_unit_id)
+          .map((l) => ({
+            item_unit_id: l.item_unit_id,
+            status: status,
+            location_id: l.source_location_id,
+            updated_at: new Date(),
+          }));
 
-        await this.stockMovesService.createMany(reversedStockMoves, trx);
+        //actualizar articulos
+        await Promise.all(
+          itemUnitsPayload.map((item) =>
+            trx('item_units').where('id', item.item_unit_id).update({
+              status: item.status,
+              location_id: item.location_id,
+              updated_at: item.updated_at,
+            }),
+          ),
+        );
+        if (
+          ![RequisitionStatus.DRAFT, RequisitionStatus.APPROVED].includes(
+            requisition.status,
+          )
+        ) {
+          //revertir movimientos
+          const stockMoves = await this.stockMovesService.findByRequisitionId(
+            requisition.id,
+          );
+
+          const reversedStockMoves = stockMoves.map(({ id, ...sm }: any) => ({
+            ...sm,
+            source_location_id: sm.destination_location_id,
+            destination_location_id: sm.source_location_id,
+            reversed_from_id: id,
+            executed_at: new Date(),
+            received_at: new Date(),
+          }));
+
+          await this.stockMovesService.createMany(reversedStockMoves, trx);
+        }
       }
-
-      const { status } = getCancelStatus(
-        requisition.movement,
-        requisition.type,
-      );
-
-      const lines = await this.requisitionLinesService.findByRequisitionId(
-        requisition.id,
-      );
-
-      //construir datos de articulos
-      const itemUnitsPayload = lines
-        .filter((l) => l.item_unit_id)
-        .map((l) => ({
-          item_unit_id: l.item_unit_id,
-          status: status,
-          location_id: l.source_location_id,
-          updated_at: new Date(),
-        }));
-
-      //actualizar articulos
-      await Promise.all(
-        itemUnitsPayload.map((item) =>
-          trx('item_units').where('id', item.item_unit_id).update({
-            status: item.status,
-            location_id: item.location_id,
-            updated_at: item.updated_at,
-          }),
-        ),
-      );
 
       //actualizar requisicion
       await trx('requisitions').update(requisitionPayload).where({
@@ -600,6 +661,7 @@ export class RequisitionsService {
   async validateRequisitionLines(
     lines: any[],
     type: RequisitionType,
+    status: RequisitionStatus,
     trx: any,
   ) {
     await Promise.all(
@@ -608,7 +670,7 @@ export class RequisitionsService {
         if (l.item_unit_id) {
           const unit = await trx('item_units')
             .where({ id: l.item_unit_id })
-            .select('location_id')
+            .select('location_id', 'status')
             .first();
 
           if (!unit) {
@@ -617,9 +679,15 @@ export class RequisitionsService {
             );
           }
 
+          if (status === RequisitionStatus.DRAFT) {
+            if (unit.status === ItemUnitStatus.RESERVED) {
+              throw new ConflictException('La unidad ya está reservada');
+            }
+          }
+
           if (unit.location_id !== l.source_location_id) {
             throw new ConflictException(
-              `La unidad ${l.item_unit_id} ya no está en la ubicación original`,
+              'La unidad ya no está en la ubicación original',
             );
           }
         }
@@ -715,8 +783,6 @@ export class RequisitionsService {
       .offset(skipCount);
 
     const items = await query;
-
-    console.log('Items', items);
 
     return {
       items,

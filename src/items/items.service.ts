@@ -300,7 +300,6 @@ export class ItemsService {
     type: RequisitionType,
     userId: number,
   ) {
-    console.log('Obteniendo catálogo con:', { movement, type, userId });
     const user = await this.usersService.findById(String(userId));
     const person = await this.personService.findById(user.person_id);
     const assigedLocations = await this.locationService.findByUser(userId);
@@ -321,9 +320,6 @@ export class ItemsService {
         : Promise.resolve([]),
     ]);
 
-    console.log('Catalog item units:', itemUnits);
-    console.log('Catalog supplies:', supplies);
-
     return {
       itemUnits,
       supplies,
@@ -331,11 +327,6 @@ export class ItemsService {
   }
 
   async findSupplyCatalog(filter: ItemFilterDto) {
-    console.log('findSupplyCatalog filter:', JSON.stringify(filter));
-    console.log(
-      'locationTypeFilter will be:',
-      filter.locationType ? `AND l.type = '${filter.locationType}'` : 'EMPTY',
-    );
     if (filter.ignoreLocation) {
       return this.db('items as i')
         .join('units as u', 'u.id', 'i.unit_id')

@@ -822,12 +822,17 @@ export class ItemUnitsService {
     };
   }
 
-  async findByUser(personId: number) {
-    const user = await this.usersServices.findByPersonId(personId);
+  async findByUser(userId: number) {
+    const user = await this.usersServices.findById(String(userId));
 
     if (!user) {
       throw new NotFoundException('Usuario no encontrado para esta persona.');
     }
+
+    const location = await this.locationsService.findByUser(user.id);
+
+    console.log('Ubicaciones del usuario:', location);  
+
 
     const items = await this.db('item_units')
       .join(

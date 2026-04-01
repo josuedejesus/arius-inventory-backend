@@ -142,6 +142,17 @@ const getCatalogFilter = (
             locationType: LocationType.PROJECT,
           },
         };
+      case RequisitionType.TRANSFER:
+        return {
+          itemUnits: {
+            ...locationRestriction,
+            status: ItemUnitStatus.AVAILABLE,
+          },
+          supplies: {
+            ...locationRestriction,
+            locationType: LocationType.WAREHOUSE,
+          },
+        }
 
       default:
         return { itemUnits: false, supplies: false };

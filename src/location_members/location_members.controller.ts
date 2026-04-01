@@ -19,10 +19,11 @@ export class LocationMembersController {
         }
     }
 
-    @Get(':personId/person')
+    @Get(':userId/user')
     @UseGuards(JwtAuthGuard)
-    async getByPerson(@Param('personId') personId: string) {
-        const members = await this.locatioMembersService.getByPersonId(Number(personId));
+    async getByUser(@Param('userId') userId: string) {
+        const members = await this.locatioMembersService.getByUserId(Number(userId));
+        console.log('Members for user', userId, members);
         return members;
     }
 }
